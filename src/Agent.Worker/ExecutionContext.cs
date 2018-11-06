@@ -419,8 +419,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             else if (!string.IsNullOrEmpty(message.JobContainer))
             {
                 var containerResource = message.Resources.Containers.Single(x => string.Equals(x.Alias, message.JobContainer, StringComparison.OrdinalIgnoreCase));
-                // avoid name collision between job container and sidecar containers when sidecar and job container are the same resource
-                containerResource.Properties.Set<string>("displayname", null);
                 Container = new ContainerInfo(HostContext, containerResource);
                 string node = Container.TranslateToContainerPath(Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Externals), "node", "bin", $"node{IOUtil.ExeExtension}"));
                 string sleepCommand = $"\"{node}\" -e \"setInterval(function(){{}}, 24 * 60 * 60 * 1000);\"";
@@ -431,30 +429,17 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 Container = null;
             }
 
-            // TODO: HACK ALERT - DONT CHECK THIS IN OUTSIDE OF USER BRANCHS
-            string services = "mocked";
-            // In the future this is where we will create containers from job message
-            if (!String.IsNullOrEmpty(services))
+            // Docker (Sidecar Containers)
+            if (message.JobSidecarContainers != null)
             {
-                var containerNetwork = Variables.Get(Constants.Variables.Agent.ContainerNetwork);
-                // Docker (Sidecar Containers)
-                // TODO: in message add something like message.SidecarContainers
-                // SidecarContainers = nginx, redis, mysql, ...
-                var nginxContainer = new Pipelines.ContainerResource();
-                nginxContainer.Properties.Set("image", "nginx");
-                nginxContainer.Properties.Set("displayname", "nginx");
-                nginxContainer.Alias = "nginx";
-                var redisContainer = new Pipelines.ContainerResource();
-                redisContainer.Properties.Set("image", "redis");
-                redisContainer.Properties.Set("displayname", "redis");
-                redisContainer.Properties.Set("command", "printenv");
-                redisContainer.Alias = "redis";
-
-                var nginx = new ContainerInfo(HostContext, nginxContainer);
-                var redis = new ContainerInfo(HostContext, redisContainer);
-                SidecarContainers = new List<ContainerInfo>() {
-                    nginx, redis
-                };
+                SidecarContainers = new List<ContainerInfo>();
+                foreach (var sidecar in message.JobSidecarContainers)
+                {
+                    var networkAlias = sidecar.Key;
+                    var containerResourceAlias = sidecar.Value;
+                    var containerResource = message.Resources.Containers.Single(c => string.Equals(c.Alias, containerResourceAlias, StringComparison.OrdinalIgnoreCase));
+                    SidecarContainers.Add(new ContainerInfo(HostContext, containerResource) { ContainerNetworkAlias = networkAlias });
+                }
             }
 
             // Proxy variables

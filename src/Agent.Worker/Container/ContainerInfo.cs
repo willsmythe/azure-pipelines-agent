@@ -24,8 +24,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             ArgUtil.NotNullOrEmpty(containerImage, nameof(containerImage));
 
             this.ContainerImage = containerImage;
-            var defaultName = $"{container.Alias}_{Pipelines.Validation.NameValidation.Sanitize(containerImage)}_{Guid.NewGuid().ToString("N").Substring(0, 6)}";
-            this.ContainerDisplayName = container.Properties.Get<string>("displayname", defaultName);
+            this.ContainerDisplayName = $"{container.Alias}_{Pipelines.Validation.NameValidation.Sanitize(containerImage)}_{Guid.NewGuid().ToString("N").Substring(0, 6)}";
             this.ContainerRegistryEndpoint = container.Endpoint?.Id ?? Guid.Empty;
             this.ContainerCreateOptions = container.Properties.Get<string>("options");
             this.SkipContainerImagePull = container.Properties.Get<bool>("localimage");
@@ -46,6 +45,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         public string ContainerId { get; set; }
         public string ContainerDisplayName { get; private set; }
         public string ContainerNetwork { get; set; }
+        public string ContainerNetworkAlias { get; set; }
         public string ContainerImage { get; set; }
         public string ContainerName { get; set; }
         public string ContainerCommand { get; set; }
@@ -136,13 +136,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             }
 
             return path;
-        }
-
-        public void UseNodeSleepCommand(IHostContext hostContext)
-        {
-            string node = TranslateToContainerPath(Path.Combine(hostContext.GetDirectory(WellKnownDirectory.Externals), "node", "bin", $"node{IOUtil.ExeExtension}"));
-            string sleepCommand = $"\"{node}\" -e \"setInterval(function(){{}}, 24 * 60 * 60 * 1000);\"";
-            ContainerCommand = sleepCommand;
         }
     }
 

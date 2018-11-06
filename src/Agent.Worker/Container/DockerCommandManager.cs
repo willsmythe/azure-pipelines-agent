@@ -120,10 +120,30 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                 }
             }
 
+            IList<string> networkAliases = new List<string>();
+            string dockerNetworkAliasArgs = string.Empty;
+            if (networkAliases?.Count > 0)
+            {
+                foreach (var alias in networkAliases)
+                {
+                    dockerNetworkAliasArgs += $" --network-alias {alias}";
+                }
+            }
+
+            IList<string> ports = new List<string>();
+            string dockerPortArgs = string.Empty;
+            if (ports?.Count > 0)
+            {
+                foreach(var port in ports)
+                {
+                    dockerPortArgs += $" -p {port}";
+                }
+            }
+
 #if OS_WINDOWS
             string dockerArgs = $"--name {displayName} {options} {dockerEnvArgs} {dockerMountVolumesArgs} {image} {command}";  // add --network={network} and -v '\\.\pipe\docker_engine:\\.\pipe\docker_engine' when they are available (17.09)
 #else
-            string dockerArgs = $"--name {displayName} --network={network} -v /var/run/docker.sock:/var/run/docker.sock {options} {dockerEnvArgs} {dockerMountVolumesArgs} {image} {command}";
+            string dockerArgs = $"--name {displayName} --network={network} {dockerNetworkAliasArgs} {dockerPortArgs} -v /var/run/docker.sock:/var/run/docker.sock {options} {dockerEnvArgs} {dockerMountVolumesArgs} {image} {command}";
 #endif
             List<string> outputStrings = await ExecuteDockerCommandAsync(context, "create", dockerArgs);
             return outputStrings.FirstOrDefault();
