@@ -9,6 +9,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
     public class ContainerInfo
     {
         private List<MountVolume> _mountVolumes;
+        private List<PortMapping> _portMappings;
+        private IDictionary<string, string> _environmentVariables;
 
 #if OS_WINDOWS
         private Dictionary<string, string> _pathMappings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -16,7 +18,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         private Dictionary<string, string> _pathMappings = new Dictionary<string, string>();
 #endif
 
-        public ContainerInfo(IHostContext hostContext, Pipelines.ContainerResource container)
+        public ContainerInfo(IHostContext hostContext, Pipelines.ContainerResource container, Boolean isJobContainer = true)
         {
             this.ContainerName = container.Alias;
 
@@ -31,7 +33,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             this.ContainerEnvironmentVariables = container.Environment;
             this.ContainerCommand = container.Properties.Get<string>("command", defaultValue: "");
 
-#if OS_WINDOWS            
+#if OS_WINDOWS
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Tools)] = "C:\\__t"; // Tool cache folder may come from ENV, so we need a unique folder to avoid collision
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Work)] = "C:\\__w";
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Root)] = "C:\\__a";
@@ -39,7 +41,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Tools)] = "/__t"; // Tool cache folder may come from ENV, so we need a unique folder to avoid collision
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Work)] = "/__w";
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Root)] = "/__a";
-#endif            
+#endif
+            this.IsJobContainer = isJobContainer;
+            if (this.IsJobContainer)
+            {
+                this.MountVolumes.Add(new MountVolume("/var/run/docker.sock", "/var/run/docker.sock"));
+            }
         }
 
         public string ContainerId { get; set; }
@@ -52,11 +59,29 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         public Guid ContainerRegistryEndpoint { get; private set; }
         public string ContainerCreateOptions { get; private set; }
         public bool SkipContainerImagePull { get; private set; }
-        public IDictionary<string, string> ContainerEnvironmentVariables { get; private set; }
 #if !OS_WINDOWS
         public string CurrentUserName { get; set; }
         public string CurrentUserId { get; set; }
 #endif
+        public bool IsJobContainer { get; set; }
+
+        public IDictionary<string, string> ContainerEnvironmentVariables
+        {
+            get
+            {
+                if (_environmentVariables == null)
+                {
+                    _environmentVariables = new Dictionary<string, string>();
+                }
+
+                return _environmentVariables;
+            }
+            private set
+            {
+                _environmentVariables = value;
+            }
+        }
+
         public List<MountVolume> MountVolumes
         {
             get
@@ -67,6 +92,23 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                 }
 
                 return _mountVolumes;
+            }
+        }
+
+        public List<PortMapping> PortMappings
+        {
+            get
+            {
+                if (_portMappings == null)
+                {
+                    _portMappings = new List<PortMapping>();
+                }
+
+                return _portMappings;
+            }
+            set
+            {
+                _portMappings = value;
             }
         }
 
@@ -151,6 +193,20 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         public string SourceVolumePath { get; set; }
         public string TargetVolumePath { get; set; }
         public bool ReadOnly { get; set; }
+    }
+
+    public class PortMapping
+    {
+        public PortMapping(string hostPort, string containerPort, string protocol)
+        {
+            this.HostPort = hostPort;
+            this.ContainerPort = containerPort;
+            this.Protocol = protocol;
+        }
+
+        public string HostPort { get; set; }
+        public string ContainerPort { get; set; }
+        public string Protocol { get; set; }
     }
 
     public class DockerVersion

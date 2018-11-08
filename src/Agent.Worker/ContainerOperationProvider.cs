@@ -214,22 +214,41 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     }
                 }
 #endif
-                container.ContainerId = await _dockerManger.DockerCreate(context: executionContext,
-                                                                         displayName: container.ContainerDisplayName,
-                                                                         image: container.ContainerImage,
-                                                                         mountVolumes: container.MountVolumes,
-                                                                         network: container.ContainerNetwork,
-                                                                         options: container.ContainerCreateOptions,
-                                                                         environment: container.ContainerEnvironmentVariables,
-                                                                         command: container.ContainerCommand);
+                // TODO Remove before merge
+                // container.ContainerId = await _dockerManger.DockerCreate(context: executionContext,
+                //                                                         displayName: container.ContainerDisplayName,
+                //                                                         image: container.ContainerImage,
+                //                                                         mountVolumes: container.MountVolumes,
+                //                                                         network: container.ContainerNetwork,
+                //                                                         options: container.ContainerCreateOptions,
+                //                                                         environment: container.ContainerEnvironmentVariables,
+                //                                                         command: container.ContainerCommand);
+
+                container.ContainerId = await _dockerManger.DockerCreate(executionContext, container);
                 ArgUtil.NotNullOrEmpty(container.ContainerId, nameof(container.ContainerId));
-                executionContext.Variables.Set(Constants.Variables.Agent.ContainerId, container.ContainerId);
+                if (container.IsJobContainer)
+                {
+                    executionContext.Variables.Set(Constants.Variables.Agent.ContainerId, container.ContainerId);
+                }
 
                 // Start container
                 int startExitCode = await _dockerManger.DockerStart(executionContext, container.ContainerId);
                 if (startExitCode != 0)
                 {
                     throw new InvalidOperationException($"Docker start fail with exit code {startExitCode}");
+                }
+
+                // Get port mappings of running container
+                if (executionContext.Container != null
+                    && !container.IsJobContainer)
+                {
+                    container.PortMappings = await _dockerManger.DockerPort(executionContext, container.ContainerId);
+                    foreach (var port in container.PortMappings)
+                    {
+                        executionContext.Variables.Set(
+                            $"{Constants.Variables.Agent.ServicePortPrefix}.{container.ContainerNetworkAlias}.ports.{port.ContainerPort}",
+                            $"{port.HostPort}");
+                    }
                 }
             }
             finally

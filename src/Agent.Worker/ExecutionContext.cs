@@ -438,7 +438,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     var networkAlias = sidecar.Key;
                     var containerResourceAlias = sidecar.Value;
                     var containerResource = message.Resources.Containers.Single(c => string.Equals(c.Alias, containerResourceAlias, StringComparison.OrdinalIgnoreCase));
-                    SidecarContainers.Add(new ContainerInfo(HostContext, containerResource) { ContainerNetworkAlias = networkAlias });
+                    SidecarContainers.Add(new ContainerInfo(HostContext, containerResource, isJobContainer: false) { ContainerNetworkAlias = networkAlias });
                 }
             }
 

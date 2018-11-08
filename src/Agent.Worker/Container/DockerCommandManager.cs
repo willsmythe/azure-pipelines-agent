@@ -17,6 +17,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         Task<int> DockerLogin(IExecutionContext context, string server, string username, string password);
         Task<int> DockerLogout(IExecutionContext context, string server);
         Task<int> DockerPull(IExecutionContext context, string image);
+        Task<string> DockerCreate(IExecutionContext context, ContainerInfo container);
         Task<string> DockerCreate(IExecutionContext context, string displayName, string image, List<MountVolume> mountVolumes, string network, string options, IDictionary<string, string> environment, string command);
         Task<int> DockerStart(IExecutionContext context, string containerId);
         Task<int> DockerStop(IExecutionContext context, string containerId);
@@ -27,6 +28,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         Task<int> DockerNetworkRemove(IExecutionContext context, string network);
         Task<int> DockerExec(IExecutionContext context, string containerId, string options, string command);
         Task<int> DockerExec(IExecutionContext context, string containerId, string options, string command, List<string> outputs);
+        Task<List<PortMapping>> DockerPort(IExecutionContext context, string containerId);
     }
 
     public class DockerCommandManager : AgentService, IDockerCommandManager
@@ -80,9 +82,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
 #if OS_WINDOWS
             // Wait for 17.07 to switch using stdin for docker registry password.
             return await ExecuteDockerCommandAsync(context, "login", $"--username \"{username}\" --password \"{password.Replace("\"", "\\\"")}\" {server}", new List<string>() { password }, context.CancellationToken);
-#else            
+#else
             return await ExecuteDockerCommandAsync(context, "login", $"--username \"{username}\" --password-stdin {server}", new List<string>() { password }, context.CancellationToken);
-#endif            
+#endif
         }
 
         public async Task<int> DockerLogout(IExecutionContext context, string server)
@@ -93,6 +95,58 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         public async Task<int> DockerPull(IExecutionContext context, string image)
         {
             return await ExecuteDockerCommandAsync(context, "pull", image, context.CancellationToken);
+        }
+
+        public async Task<string> DockerCreate(IExecutionContext context, ContainerInfo container)
+        {
+            IList<string> dockerOptions = new List<string>();
+            dockerOptions.Add($"--name {container.ContainerDisplayName}");
+            if (!string.IsNullOrEmpty(container.ContainerNetwork))
+            {
+                dockerOptions.Add($"--network {container.ContainerNetwork}");
+            }
+            foreach (var alias in container.ContainerNetworkAlias)
+            {
+                dockerOptions.Add($"--network-alias {alias}");
+            }
+            foreach (var port in container.PortMappings)
+            {
+                var portArg = string.Empty;
+                if (!string.IsNullOrEmpty(port.HostPort) && !string.IsNullOrEmpty(port.ContainerPort))
+                {
+                    portArg = $"-p {port.HostPort}:{port.ContainerPort}";
+
+                }
+                else if (string.IsNullOrEmpty(port.HostPort) && !string.IsNullOrEmpty(port.ContainerPort))
+                {
+                    portArg = $"-p {port.ContainerPort}";
+                }
+                if (!string.IsNullOrEmpty(portArg))
+                {
+                    dockerOptions.Add(portArg);
+                }
+            }
+            dockerOptions.Add($"{container.ContainerCreateOptions}");
+            foreach (var env in container.ContainerEnvironmentVariables)
+            {
+                dockerOptions.Add($"-e \"{env.Key}={env.Value.Replace("\"", "\\\"")}\"");
+            }
+            foreach (var volume in container.MountVolumes)
+            {
+                // replace `"` with `\"` and add `"{0}"` to all path.
+                var volumeArg = $"-v \"{volume.SourceVolumePath.Replace("\"", "\\\"")}\":\"{volume.TargetVolumePath.Replace("\"", "\\\"")}\"";
+                if (volume.ReadOnly)
+                {
+                    volumeArg += ":ro";
+                }
+                dockerOptions.Add(volumeArg);
+            }
+            dockerOptions.Add($"{container.ContainerImage}");
+            dockerOptions.Add($"{container.ContainerCommand}");
+
+            var optionsString = string.Join(" ", dockerOptions);
+            List<string> outputStrings = await ExecuteDockerCommandAsync(context, "create", optionsString);
+            return outputStrings.FirstOrDefault();
         }
 
         public async Task<string> DockerCreate(IExecutionContext context, string displayName, string image, List<MountVolume> mountVolumes, string network, string options, IDictionary<string, string> environment, string command)
@@ -176,7 +230,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
 
         public async Task<int> DockerNetworkCreate(IExecutionContext context, string network)
         {
+#if OS_WINDOWS
+            return await ExecuteDockerCommandAsync(context, "network", $"create {network} --driver nat", context.CancellationToken);
+#else
             return await ExecuteDockerCommandAsync(context, "network", $"create {network}", context.CancellationToken);
+#endif
         }
 
         public async Task<int> DockerNetworkRemove(IExecutionContext context, string network)
@@ -228,6 +286,35 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                             requireExitCodeZero: false,
                             outputEncoding: null,
                             cancellationToken: CancellationToken.None);
+        }
+
+        public async Task<List<PortMapping>> DockerPort(IExecutionContext context, string containerId)
+        {
+            const string targetPort = "targetPort";
+            const string proto = "proto";
+            const string host = "host";
+            const string hostPort = "hostPort";
+            Regex rx = new Regex(
+                //"TARGET_PORT/PROTO -> HOST:HOST_PORT"
+                $"^(?<{targetPort}>\\d+)/(?<{proto}>\\w+) -> (?<{host}>.+):(?<{hostPort}>\\d+)$",
+                RegexOptions.None,
+                TimeSpan.FromMilliseconds(100)
+            );
+            List<string> portMappingLines = await ExecuteDockerCommandAsync(context, "port", containerId);
+            List<PortMapping> portMappings = new List<PortMapping>();
+            foreach(var line in portMappingLines)
+            {
+                Match m = rx.Match(line);
+                if (m.Success)
+                {
+                    portMappings.Add(new PortMapping(
+                        m.Groups[hostPort].Value,
+                        m.Groups[targetPort].Value,
+                        m.Groups[proto].Value
+                    ));
+                }
+            }
+            return portMappings;
         }
 
         private Task<int> ExecuteDockerCommandAsync(IExecutionContext context, string command, string options, CancellationToken cancellationToken = default(CancellationToken))
