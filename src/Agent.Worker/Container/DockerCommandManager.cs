@@ -105,9 +105,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             {
                 dockerOptions.Add($"--network {container.ContainerNetwork}");
             }
-            foreach (var alias in container.ContainerNetworkAlias)
+            if (!string.IsNullOrEmpty(container.ContainerNetworkAlias))
             {
-                dockerOptions.Add($"--network-alias {alias}");
+                dockerOptions.Add($"--network-alias {container.ContainerNetworkAlias}");
             }
             foreach (var port in container.PortMappings)
             {
