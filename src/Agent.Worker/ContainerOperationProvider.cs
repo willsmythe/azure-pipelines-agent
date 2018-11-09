@@ -265,6 +265,15 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             }
 
 #if !OS_WINDOWS
+            if (container.IsJobContainer)
+            {
+                CreateContainerUser(executionContext, container);
+            }
+#endif
+        }
+
+        private async void CreateContainerUser(IExecutionContext executionContext, ContainerInfo container)
+        {
             // Ensure bash exist in the image
             int execWhichBashExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"which bash");
             if (execWhichBashExitCode != 0)
@@ -367,7 +376,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             {
                 throw new InvalidOperationException($"Docker exec fail with exit code {execEchoExitCode}");
             }
-#endif
         }
 
         public async Task StopContainerAsync(IExecutionContext executionContext, object data)
