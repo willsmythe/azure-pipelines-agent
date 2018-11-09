@@ -42,6 +42,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Work)] = "/__w";
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Root)] = "/__a";
 #endif
+            this.PortMappings = ParsePortMapping(container.Ports);
             this.IsJobContainer = isJobContainer;
             if (this.IsJobContainer)
             {
@@ -178,6 +179,27 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             }
 
             return path;
+        }
+
+        private List<PortMapping> ParsePortMapping(IList<string> ports)
+        {
+            List<PortMapping> portMappings = new List<PortMapping>();
+            if (ports?.Count > 0)
+            {
+                foreach (var port in ports)
+                {
+                    var portSplit = port.Split(":");
+                    if (portSplit?.Length == 2)
+                    {
+                        portMappings.Add(new PortMapping(portSplit[0], portSplit[1], "TODO: PROTO / LONG SYNTAX"));
+                    }
+                    else
+                    {
+                        portMappings.Add(new PortMapping(null, port, "TODO: PROTO / LONG SYNTAX"));
+                    }
+                }
+            }
+            return portMappings;
         }
     }
 
