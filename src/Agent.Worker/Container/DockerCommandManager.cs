@@ -129,7 +129,15 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             dockerOptions.Add($"{container.ContainerCreateOptions}");
             foreach (var env in container.ContainerEnvironmentVariables)
             {
-                dockerOptions.Add($"-e \"{env.Key}={env.Value.Replace("\"", "\\\"")}\"");
+                if (String.IsNullOrEmpty(env.Value) && String.IsNullOrEmpty(context.Variables.Get("_VSTS_DONT_RESOLVE_ENV_FROM_HOST")))
+                {
+                    // TODO: Remove fallback variable if stable
+                    dockerOptions.Add($"-e \"{env.Key}\"");
+                }
+                else
+                {
+                    dockerOptions.Add($"-e \"{env.Key}={env.Value.Replace("\"", "\\\"")}\"");
+                }
             }
             foreach (var volume in container.MountVolumes)
             {
