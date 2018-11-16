@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Agent.Sdk;
+using Microsoft.TeamFoundation.Framework.Common;
 
 namespace Microsoft.VisualStudio.Services.Agent.Util
 {
@@ -116,7 +117,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Util
                 requireExitCodeZero: requireExitCodeZero,
                 outputEncoding: outputEncoding,
                 killProcessOnCancel: false,
-                contentsToStandardIn: null,
                 cancellationToken: cancellationToken);
         }
 
@@ -138,7 +138,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Util
                 requireExitCodeZero: requireExitCodeZero,
                 outputEncoding: outputEncoding,
                 killProcessOnCancel: killProcessOnCancel,
-                contentsToStandardIn: null,
+                redirectStandardIn: null,
                 cancellationToken: cancellationToken);
         }
 
@@ -150,7 +150,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Util
             bool requireExitCodeZero,
             Encoding outputEncoding,
             bool killProcessOnCancel,
-            IList<string> contentsToStandardIn,
+            InputQueue<string> redirectStandardIn,
             CancellationToken cancellationToken)
         {
             ArgUtil.Null(_proc, nameof(_proc));
@@ -163,7 +163,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Util
             Trace.Info($"  Require exit code zero: '{requireExitCodeZero}'");
             Trace.Info($"  Encoding web name: {outputEncoding?.WebName} ; code page: '{outputEncoding?.CodePage}'");
             Trace.Info($"  Force kill process on cancellation: '{killProcessOnCancel}'");
-            Trace.Info($"  Lines to send through STDIN: '{contentsToStandardIn?.Count ?? 0}'");
+            Trace.Info($"  Redirected STDIN: '{redirectStandardIn != null}'");
 
             _proc = new Process();
             _proc.StartInfo.FileName = fileName;
@@ -235,20 +235,15 @@ namespace Microsoft.VisualStudio.Services.Agent.Util
 
             if (_proc.StartInfo.RedirectStandardInput)
             {
-                // Write contents to STDIN
-                if (contentsToStandardIn?.Count > 0)
+                if (redirectStandardIn != null)
                 {
-                    foreach (var content in contentsToStandardIn)
-                    {
-                        // Write the contents as UTF8 to handle all characters.
-                        var utf8Writer = new StreamWriter(_proc.StandardInput.BaseStream, new UTF8Encoding(false));
-                        utf8Writer.WriteLine(content);
-                        utf8Writer.Flush();
-                    }
+                    StartWriteStream(redirectStandardIn, _proc.StandardInput);
                 }
-
-                // Close the input stream. This is done to prevent commands from blocking the build waiting for input from the user.
-                _proc.StandardInput.Close();
+                else
+                {
+                    // Close the input stream. This is done to prevent commands from blocking the build waiting for input from the user.
+                    _proc.StandardInput.Close();
+                }
             }
 
             using (var registration = cancellationToken.Register(async () => await CancelAndKillProcessTree(killProcessOnCancel)))
@@ -433,6 +428,32 @@ namespace Microsoft.VisualStudio.Services.Agent.Util
                 {
                     _processExitedCompletionSource.TrySetResult(true);
                 }
+            });
+        }
+
+        private void StartWriteStream(InputQueue<string> redirectStandardIn, StreamWriter standardIn)
+        {
+            Task.Run(async () =>
+            {
+                // Write the contents as UTF8 to handle all characters.
+                var utf8Writer = new StreamWriter(standardIn.BaseStream, new UTF8Encoding(false));
+
+                while (!_processExitedCompletionSource.Task.IsCompleted)
+                {
+                    Task<string> dequeueTask = redirectStandardIn.DequeueAsync();
+                    var completedTask = await Task.WhenAny(dequeueTask, _processExitedCompletionSource.Task);
+                    if (completedTask == dequeueTask)
+                    {
+                        string input = await dequeueTask;
+                        if (!string.IsNullOrEmpty(input))
+                        {
+                            utf8Writer.WriteLine(input);
+                            utf8Writer.Flush();
+                        }
+                    }
+                }
+
+                Trace.Info("STDIN stream write finished.");
             });
         }
 
