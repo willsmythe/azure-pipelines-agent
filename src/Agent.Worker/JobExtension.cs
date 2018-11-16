@@ -132,7 +132,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     Stack<IStep> postJobStepsBuilder = new Stack<IStep>();
                     Dictionary<Guid, Variables> taskVariablesMapping = new Dictionary<Guid, Variables>();
 
-                    if (context.Container != null || context.SidecarContainers != null)
+                    if (context.Container != null || context.SidecarContainers?.Count > 0)
                     {
                         var containerProvider = HostContext.GetService<IContainerOperationProvider>();
                         var containers = new List<Container.ContainerInfo>();
@@ -140,17 +140,18 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                         {
                             containers.Add(context.Container);
                         }
-                        if (context.SidecarContainers != null)
+                        if (context.SidecarContainers?.Count > 0)
                         {
                             containers.AddRange(context.SidecarContainers);
                         }
+                        // TODO (@dakale): Localize strings
                         initResult.PreJobSteps.Add(new JobExtensionRunner(runAsync: containerProvider.StartMultipleContainersAsync,
                                                                           condition: ExpressionManager.Succeeded,
-                                                                          displayName: containers.Count > 1 ? "Initializing Containers" : "Initializing Container",
+                                                                          displayName: containers.Count > 1 ? StringUtil.Loc("InitializeContainers") : StringUtil.Loc("InitializeContainer"),
                                                                           data: (object)containers));
                         postJobStepsBuilder.Push(new JobExtensionRunner(runAsync: containerProvider.StopMultipleContainersAsync,
                                                                         condition: ExpressionManager.Always,
-                                                                        displayName: containers.Count > 1 ? "Stopping Containers" : "Stopping Container",
+                                                                        displayName: containers.Count > 1 ? StringUtil.Loc("StopContainers") : StringUtil.Loc("StopContainer"),
                                                                         data: (object)containers));
                     }
 

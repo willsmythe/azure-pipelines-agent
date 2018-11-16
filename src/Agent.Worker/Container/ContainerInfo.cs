@@ -42,11 +42,16 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Work)] = "/__w";
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Root)] = "/__a";
 #endif
-            this.PortMappings = ParsePortMapping(container.Ports);
+            this.PortMappings.AddRange(ParsePorts(container.Ports));
+            this.MountVolumes.AddRange(ParseVolumes(container.Volumes));
             this.IsJobContainer = isJobContainer;
             if (this.IsJobContainer)
             {
                 this.MountVolumes.Add(new MountVolume("/var/run/docker.sock", "/var/run/docker.sock"));
+
+                string node = TranslateToContainerPath(Path.Combine(hostContext.GetDirectory(WellKnownDirectory.Externals), "node", "bin", $"node{IOUtil.ExeExtension}"));
+                string sleepCommand = $"\"{node}\" -e \"setInterval(function(){{}}, 24 * 60 * 60 * 1000);\"";
+                this.ContainerCommand = sleepCommand;
             }
         }
 
@@ -181,21 +186,72 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             return path;
         }
 
-        private List<PortMapping> ParsePortMapping(IList<string> ports)
+        private List<MountVolume> ParseVolumes(IList<string> volumes)
+        {
+            List<MountVolume> mountVolumes = new List<MountVolume>();
+            if (volumes?.Count > 0)
+            {
+                foreach (var volume in volumes)
+                {
+                    var volumeSplit = volume.Split(":");
+                    if (volumeSplit?.Length == 3)
+                    {
+                        // source:target:ro
+                        mountVolumes.Add(new MountVolume(volumeSplit[0], volumeSplit[1], String.Equals(volumeSplit[2], "ro")));
+                    }
+                    else if (volumeSplit?.Length == 2)
+                    {
+                        if (String.Equals(volumeSplit[1], "ro"))
+                        {
+                            // target:ro
+                            mountVolumes.Add(new MountVolume(null, volumeSplit[0], true));
+                        }
+                        else
+                        {
+                            // source:target
+                            mountVolumes.Add(new MountVolume(volumeSplit[0], volumeSplit[1]));
+                        }
+                    }
+                    else
+                    {
+                        // target - or, default to passing straight through
+                        mountVolumes.Add(new MountVolume(null, volume));
+                    }
+                }
+            }
+            return mountVolumes;
+        }
+
+        private List<PortMapping> ParsePorts(IList<string> ports)
         {
             List<PortMapping> portMappings = new List<PortMapping>();
             if (ports?.Count > 0)
             {
                 foreach (var port in ports)
                 {
-                    var portSplit = port.Split(":");
-                    if (portSplit?.Length == 2)
+                    var protoSplit = port.Split("/");
+                    String portString;
+                    String protoString = null;
+                    if (protoSplit?.Length == 2)
                     {
-                        portMappings.Add(new PortMapping(portSplit[0], portSplit[1], "TODO: PROTO / LONG SYNTAX"));
+                        protoString = protoSplit[1];
+                    }
+                    portString = protoSplit[0];
+                    var portSplit = portString.Split(":");
+                    if (portSplit?.Length == 3)
+                    {
+                        // host:hostport:targetport
+                        portMappings.Add(new PortMapping($"{portSplit[0]}:{portSplit[1]}", portSplit[2], protoString));
+                    }
+                    else if (portSplit?.Length == 2)
+                    {
+                        // hostport:targetport
+                        portMappings.Add(new PortMapping(portSplit[0], portSplit[1], protoString));
                     }
                     else
                     {
-                        portMappings.Add(new PortMapping(null, port, "TODO: PROTO / LONG SYNTAX"));
+                        // target - or, default to passing straight through
+                        portMappings.Add(new PortMapping(null, port, protoString));
                     }
                 }
             }

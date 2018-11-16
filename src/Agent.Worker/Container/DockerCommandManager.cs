@@ -100,6 +100,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         public async Task<string> DockerCreate(IExecutionContext context, ContainerInfo container)
         {
             IList<string> dockerOptions = new List<string>();
+            // OPTIONS
             dockerOptions.Add($"--name {container.ContainerDisplayName}");
             if (!string.IsNullOrEmpty(container.ContainerNetwork))
             {
@@ -142,14 +143,26 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             foreach (var volume in container.MountVolumes)
             {
                 // replace `"` with `\"` and add `"{0}"` to all path.
-                var volumeArg = $"-v \"{volume.SourceVolumePath.Replace("\"", "\\\"")}\":\"{volume.TargetVolumePath.Replace("\"", "\\\"")}\"";
+                String volumeArg;
+                if (String.IsNullOrEmpty(volume.SourceVolumePath))
+                {
+                    // Anonymous docker volume
+                    volumeArg = $"-v \"{volume.TargetVolumePath.Replace("\"", "\\\"")}\"";
+                }
+                else
+                {
+                    // Named Docker volume / host bind mount
+                    volumeArg = $"-v \"{volume.SourceVolumePath.Replace("\"", "\\\"")}\":\"{volume.TargetVolumePath.Replace("\"", "\\\"")}\"";
+                }
                 if (volume.ReadOnly)
                 {
                     volumeArg += ":ro";
                 }
                 dockerOptions.Add(volumeArg);
             }
+            // IMAGE
             dockerOptions.Add($"{container.ContainerImage}");
+            // COMMAND
             dockerOptions.Add($"{container.ContainerCommand}");
 
             var optionsString = string.Join(" ", dockerOptions);
@@ -306,7 +319,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                 //"TARGET_PORT/PROTO -> HOST:HOST_PORT"
                 $"^(?<{targetPort}>\\d+)/(?<{proto}>\\w+) -> (?<{host}>.+):(?<{hostPort}>\\d+)$",
                 RegexOptions.None,
-                TimeSpan.FromMilliseconds(100)
+                TimeSpan.FromSeconds(1)
             );
             List<string> portMappingLines = await ExecuteDockerCommandAsync(context, "port", containerId);
             List<PortMapping> portMappings = new List<PortMapping>();

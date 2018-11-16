@@ -419,10 +419,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             else if (!string.IsNullOrEmpty(message.JobContainer))
             {
                 var containerResource = message.Resources.Containers.Single(x => string.Equals(x.Alias, message.JobContainer, StringComparison.OrdinalIgnoreCase));
-                Container = new ContainerInfo(HostContext, containerResource);
-                string node = Container.TranslateToContainerPath(Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Externals), "node", "bin", $"node{IOUtil.ExeExtension}"));
-                string sleepCommand = $"\"{node}\" -e \"setInterval(function(){{}}, 24 * 60 * 60 * 1000);\"";
-                Container.ContainerCommand = sleepCommand;
+                Container = new ContainerInfo(HostContext, containerResource, isJobContainer: true);
             }
             else
             {
@@ -430,7 +427,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             }
 
             // Docker (Sidecar Containers)
-            if (message.JobSidecarContainers != null)
+            if (message.JobSidecarContainers?.Count > 0)
             {
                 SidecarContainers = new List<ContainerInfo>();
                 foreach (var sidecar in message.JobSidecarContainers)
