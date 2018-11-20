@@ -418,8 +418,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             }
             else if (!string.IsNullOrEmpty(message.JobContainer))
             {
-                var containerResource = message.Resources.Containers.Single(x => string.Equals(x.Alias, message.JobContainer, StringComparison.OrdinalIgnoreCase));
-                Container = new ContainerInfo(HostContext, containerResource, isJobContainer: true);
+                Container = new ContainerInfo(HostContext, message.Resources.Containers.Single(x => string.Equals(x.Alias, message.JobContainer, StringComparison.OrdinalIgnoreCase)), isJobContainer: true);
             }
             else
             {

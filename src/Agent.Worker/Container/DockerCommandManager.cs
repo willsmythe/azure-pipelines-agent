@@ -18,7 +18,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         Task<int> DockerLogout(IExecutionContext context, string server);
         Task<int> DockerPull(IExecutionContext context, string image);
         Task<string> DockerCreate(IExecutionContext context, ContainerInfo container);
-        Task<string> DockerCreate(IExecutionContext context, string displayName, string image, List<MountVolume> mountVolumes, string network, string options, IDictionary<string, string> environment, string command);
+        // TODO: Remove before merge
+        // Task<string> DockerCreate(IExecutionContext context, string displayName, string image, List<MountVolume> mountVolumes, string network, string options, IDictionary<string, string> environment, string command);
         Task<int> DockerStart(IExecutionContext context, string containerId);
         Task<int> DockerStop(IExecutionContext context, string containerId);
         Task<int> DockerLogs(IExecutionContext context, string containerId);
@@ -170,59 +171,60 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             return outputStrings.FirstOrDefault();
         }
 
-        public async Task<string> DockerCreate(IExecutionContext context, string displayName, string image, List<MountVolume> mountVolumes, string network, string options, IDictionary<string, string> environment, string command)
-        {
-            string dockerMountVolumesArgs = string.Empty;
-            if (mountVolumes?.Count > 0)
-            {
-                foreach (var volume in mountVolumes)
-                {
-                    // replace `"` with `\"` and add `"{0}"` to all path.
-                    dockerMountVolumesArgs += $" -v \"{volume.SourceVolumePath.Replace("\"", "\\\"")}\":\"{volume.TargetVolumePath.Replace("\"", "\\\"")}\"";
-                    if (volume.ReadOnly)
-                    {
-                        dockerMountVolumesArgs += ":ro";
-                    }
-                }
-            }
+// TODO: Remove before merge
+//         public async Task<string> DockerCreate(IExecutionContext context, string displayName, string image, List<MountVolume> mountVolumes, string network, string options, IDictionary<string, string> environment, string command)
+//         {
+//             string dockerMountVolumesArgs = string.Empty;
+//             if (mountVolumes?.Count > 0)
+//             {
+//                 foreach (var volume in mountVolumes)
+//                 {
+//                     // replace `"` with `\"` and add `"{0}"` to all path.
+//                     dockerMountVolumesArgs += $" -v \"{volume.SourceVolumePath.Replace("\"", "\\\"")}\":\"{volume.TargetVolumePath.Replace("\"", "\\\"")}\"";
+//                     if (volume.ReadOnly)
+//                     {
+//                         dockerMountVolumesArgs += ":ro";
+//                     }
+//                 }
+//             }
 
-            string dockerEnvArgs = string.Empty;
-            if (environment?.Count > 0)
-            {
-                foreach (var env in environment)
-                {
-                    dockerEnvArgs += $" -e \"{env.Key}={env.Value.Replace("\"", "\\\"")}\"";
-                }
-            }
+//             string dockerEnvArgs = string.Empty;
+//             if (environment?.Count > 0)
+//             {
+//                 foreach (var env in environment)
+//                 {
+//                     dockerEnvArgs += $" -e \"{env.Key}={env.Value.Replace("\"", "\\\"")}\"";
+//                 }
+//             }
 
-            IList<string> networkAliases = new List<string>();
-            string dockerNetworkAliasArgs = string.Empty;
-            if (networkAliases?.Count > 0)
-            {
-                foreach (var alias in networkAliases)
-                {
-                    dockerNetworkAliasArgs += $" --network-alias {alias}";
-                }
-            }
+//             IList<string> networkAliases = new List<string>();
+//             string dockerNetworkAliasArgs = string.Empty;
+//             if (networkAliases?.Count > 0)
+//             {
+//                 foreach (var alias in networkAliases)
+//                 {
+//                     dockerNetworkAliasArgs += $" --network-alias {alias}";
+//                 }
+//             }
 
-            IList<string> ports = new List<string>();
-            string dockerPortArgs = string.Empty;
-            if (ports?.Count > 0)
-            {
-                foreach(var port in ports)
-                {
-                    dockerPortArgs += $" -p {port}";
-                }
-            }
+//             IList<string> ports = new List<string>();
+//             string dockerPortArgs = string.Empty;
+//             if (ports?.Count > 0)
+//             {
+//                 foreach(var port in ports)
+//                 {
+//                     dockerPortArgs += $" -p {port}";
+//                 }
+//             }
 
-#if OS_WINDOWS
-            string dockerArgs = $"--name {displayName} {options} {dockerEnvArgs} {dockerMountVolumesArgs} {image} {command}";  // add --network={network} and -v '\\.\pipe\docker_engine:\\.\pipe\docker_engine' when they are available (17.09)
-#else
-            string dockerArgs = $"--name {displayName} --network={network} {dockerNetworkAliasArgs} {dockerPortArgs} -v /var/run/docker.sock:/var/run/docker.sock {options} {dockerEnvArgs} {dockerMountVolumesArgs} {image} {command}";
-#endif
-            List<string> outputStrings = await ExecuteDockerCommandAsync(context, "create", dockerArgs);
-            return outputStrings.FirstOrDefault();
-        }
+// #if OS_WINDOWS
+//             string dockerArgs = $"--name {displayName} {options} {dockerEnvArgs} {dockerMountVolumesArgs} {image} {command}";  // add --network={network} and -v '\\.\pipe\docker_engine:\\.\pipe\docker_engine' when they are available (17.09)
+// #else
+//             string dockerArgs = $"--name {displayName} --network={network} {dockerNetworkAliasArgs} {dockerPortArgs} -v /var/run/docker.sock:/var/run/docker.sock {options} {dockerEnvArgs} {dockerMountVolumesArgs} {image} {command}";
+// #endif
+//             List<string> outputStrings = await ExecuteDockerCommandAsync(context, "create", dockerArgs);
+//             return outputStrings.FirstOrDefault();
+//         }
 
         public async Task<int> DockerStart(IExecutionContext context, string containerId)
         {

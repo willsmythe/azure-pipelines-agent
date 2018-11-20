@@ -267,115 +267,110 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 #if !OS_WINDOWS
             if (container.IsJobContainer)
             {
-                CreateContainerUser(executionContext, container);
+                // Ensure bash exist in the image
+                int execWhichBashExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"which bash");
+                if (execWhichBashExitCode != 0)
+                {
+                    try
+                    {
+                        // Make sure container is up and running
+                        var psOutputs = await _dockerManger.DockerPS(executionContext, container.ContainerId, "--filter status=running");
+                        if (psOutputs.FirstOrDefault(x => !string.IsNullOrEmpty(x))?.StartsWith(container.ContainerId) != true)
+                        {
+                            // container is not up and running, pull docker log for this container.
+                            await _dockerManger.DockerPS(executionContext, container.ContainerId, string.Empty);
+                            int logsExitCode = await _dockerManger.DockerLogs(executionContext, container.ContainerId);
+                            if (logsExitCode != 0)
+                            {
+                                executionContext.Warning($"Docker logs fail with exit code {logsExitCode}");
+                            }
+
+                            executionContext.Warning($"Docker container {container.ContainerId} is not in running state.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // pull container log is best effort.
+                        Trace.Error("Catch exception when check container log and container status.");
+                        Trace.Error(ex);
+                    }
+
+                    throw new InvalidOperationException($"Docker exec fail with exit code {execWhichBashExitCode}");
+                }
+
+                // Get current username
+                container.CurrentUserName = (await ExecuteCommandAsync(executionContext, "whoami", string.Empty)).FirstOrDefault();
+                ArgUtil.NotNullOrEmpty(container.CurrentUserName, nameof(container.CurrentUserName));
+
+                // Get current userId
+                container.CurrentUserId = (await ExecuteCommandAsync(executionContext, "id", $"-u {container.CurrentUserName}")).FirstOrDefault();
+                ArgUtil.NotNullOrEmpty(container.CurrentUserId, nameof(container.CurrentUserId));
+
+                executionContext.Output(StringUtil.Loc("CreateUserWithSameUIDInsideContainer", container.CurrentUserId));
+
+                // Create an user with same uid as the agent run as user inside the container.
+                // All command execute in docker will run as Root by default, 
+                // this will cause the agent on the host machine doesn't have permission to any new file/folder created inside the container.
+                // So, we create a user account with same UID inside the container and let all docker exec command run as that user.
+                string containerUserName = string.Empty;
+
+                // We need to find out whether there is a user with same UID inside the container
+                List<string> userNames = new List<string>();
+                int execGrepExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"bash -c \"grep {container.CurrentUserId} /etc/passwd | cut -f1 -d:\"", userNames);
+                if (execGrepExitCode != 0)
+                {
+                    throw new InvalidOperationException($"Docker exec fail with exit code {execGrepExitCode}");
+                }
+
+                if (userNames.Count > 0)
+                {
+                    // check all potential username that might match the UID.
+                    foreach (string username in userNames)
+                    {
+                        int execIdExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"id -u {username}");
+                        if (execIdExitCode == 0)
+                        {
+                            containerUserName = username;
+                            break;
+                        }
+                    }
+                }
+
+                // Create a new user with same UID
+                if (string.IsNullOrEmpty(containerUserName))
+                {
+                    containerUserName = $"{container.CurrentUserName}_VSTSContainer";
+                    int execUseraddExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"useradd -m -u {container.CurrentUserId} {containerUserName}");
+                    if (execUseraddExitCode != 0)
+                    {
+                        throw new InvalidOperationException($"Docker exec fail with exit code {execUseraddExitCode}");
+                    }
+                }
+
+                executionContext.Output(StringUtil.Loc("GrantContainerUserSUDOPrivilege", containerUserName));
+
+                // Create a new vsts_sudo group for giving sudo permission
+                int execGroupaddExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"groupadd VSTS_Container_SUDO");
+                if (execGroupaddExitCode != 0)
+                {
+                    throw new InvalidOperationException($"Docker exec fail with exit code {execGroupaddExitCode}");
+                }
+
+                // Add the new created user to the new created VSTS_SUDO group.
+                int execUsermodExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"usermod -a -G VSTS_Container_SUDO {containerUserName}");
+                if (execUsermodExitCode != 0)
+                {
+                    throw new InvalidOperationException($"Docker exec fail with exit code {execUsermodExitCode}");
+                }
+
+                // Allow the new vsts_sudo group run any sudo command without providing password.
+                int execEchoExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"su -c \"echo '%VSTS_Container_SUDO ALL=(ALL:ALL) NOPASSWD:ALL' >> /etc/sudoers\"");
+                if (execUsermodExitCode != 0)
+                {
+                    throw new InvalidOperationException($"Docker exec fail with exit code {execEchoExitCode}");
+                }
             }
 #endif
-        }
-
-        private async void CreateContainerUser(IExecutionContext executionContext, ContainerInfo container)
-        {
-            // Ensure bash exist in the image
-            int execWhichBashExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"which bash");
-            if (execWhichBashExitCode != 0)
-            {
-                try
-                {
-                    // Make sure container is up and running
-                    var psOutputs = await _dockerManger.DockerPS(executionContext, container.ContainerId, "--filter status=running");
-                    if (psOutputs.FirstOrDefault(x => !string.IsNullOrEmpty(x))?.StartsWith(container.ContainerId) != true)
-                    {
-                        // container is not up and running, pull docker log for this container.
-                        await _dockerManger.DockerPS(executionContext, container.ContainerId, string.Empty);
-                        int logsExitCode = await _dockerManger.DockerLogs(executionContext, container.ContainerId);
-                        if (logsExitCode != 0)
-                        {
-                            executionContext.Warning($"Docker logs fail with exit code {logsExitCode}");
-                        }
-
-                        executionContext.Warning($"Docker container {container.ContainerId} is not in running state.");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // pull container log is best effort.
-                    Trace.Error("Catch exception when check container log and container status.");
-                    Trace.Error(ex);
-                }
-
-                throw new InvalidOperationException($"Docker exec fail with exit code {execWhichBashExitCode}");
-            }
-
-            // Get current username
-            container.CurrentUserName = (await ExecuteCommandAsync(executionContext, "whoami", string.Empty)).FirstOrDefault();
-            ArgUtil.NotNullOrEmpty(container.CurrentUserName, nameof(container.CurrentUserName));
-
-            // Get current userId
-            container.CurrentUserId = (await ExecuteCommandAsync(executionContext, "id", $"-u {container.CurrentUserName}")).FirstOrDefault();
-            ArgUtil.NotNullOrEmpty(container.CurrentUserId, nameof(container.CurrentUserId));
-
-            executionContext.Output(StringUtil.Loc("CreateUserWithSameUIDInsideContainer", container.CurrentUserId));
-
-            // Create an user with same uid as the agent run as user inside the container.
-            // All command execute in docker will run as Root by default, 
-            // this will cause the agent on the host machine doesn't have permission to any new file/folder created inside the container.
-            // So, we create a user account with same UID inside the container and let all docker exec command run as that user.
-            string containerUserName = string.Empty;
-
-            // We need to find out whether there is a user with same UID inside the container
-            List<string> userNames = new List<string>();
-            int execGrepExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"bash -c \"grep {container.CurrentUserId} /etc/passwd | cut -f1 -d:\"", userNames);
-            if (execGrepExitCode != 0)
-            {
-                throw new InvalidOperationException($"Docker exec fail with exit code {execGrepExitCode}");
-            }
-
-            if (userNames.Count > 0)
-            {
-                // check all potential username that might match the UID.
-                foreach (string username in userNames)
-                {
-                    int execIdExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"id -u {username}");
-                    if (execIdExitCode == 0)
-                    {
-                        containerUserName = username;
-                        break;
-                    }
-                }
-            }
-
-            // Create a new user with same UID
-            if (string.IsNullOrEmpty(containerUserName))
-            {
-                containerUserName = $"{container.CurrentUserName}_VSTSContainer";
-                int execUseraddExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"useradd -m -u {container.CurrentUserId} {containerUserName}");
-                if (execUseraddExitCode != 0)
-                {
-                    throw new InvalidOperationException($"Docker exec fail with exit code {execUseraddExitCode}");
-                }
-            }
-
-            executionContext.Output(StringUtil.Loc("GrantContainerUserSUDOPrivilege", containerUserName));
-
-            // Create a new vsts_sudo group for giving sudo permission
-            int execGroupaddExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"groupadd VSTS_Container_SUDO");
-            if (execGroupaddExitCode != 0)
-            {
-                throw new InvalidOperationException($"Docker exec fail with exit code {execGroupaddExitCode}");
-            }
-
-            // Add the new created user to the new created VSTS_SUDO group.
-            int execUsermodExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"usermod -a -G VSTS_Container_SUDO {containerUserName}");
-            if (execUsermodExitCode != 0)
-            {
-                throw new InvalidOperationException($"Docker exec fail with exit code {execUsermodExitCode}");
-            }
-
-            // Allow the new vsts_sudo group run any sudo command without providing password.
-            int execEchoExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"su -c \"echo '%VSTS_Container_SUDO ALL=(ALL:ALL) NOPASSWD:ALL' >> /etc/sudoers\"");
-            if (execUsermodExitCode != 0)
-            {
-                throw new InvalidOperationException($"Docker exec fail with exit code {execEchoExitCode}");
-            }
         }
 
         public async Task StopContainerAsync(IExecutionContext executionContext, object data)
