@@ -123,6 +123,10 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                 {
                     portArg = $"-p {port.ContainerPort}";
                 }
+                if (!string.IsNullOrEmpty(port.Protocol))
+                {
+                    portArg += $"/{port.Protocol}";
+                }
                 if (!string.IsNullOrEmpty(portArg))
                 {
                     dockerOptions.Add(portArg);
