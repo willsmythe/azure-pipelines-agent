@@ -62,6 +62,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         public string ContainerImage { get; set; }
         public string ContainerName { get; set; }
         public string ContainerCommand { get; set; }
+        public string ContainerBringNodePath { get; set; }
         public Guid ContainerRegistryEndpoint { get; private set; }
         public string ContainerCreateOptions { get; private set; }
         public bool SkipContainerImagePull { get; private set; }

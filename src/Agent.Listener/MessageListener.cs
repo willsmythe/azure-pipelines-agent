@@ -113,7 +113,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
                     Trace.Info("Session creation has been cancelled.");
                     throw;
                 }
-                catch (TaskAgentAccessTokeExpiredException)
+                catch (TaskAgentAccessTokenExpiredException)
                 {
                     Trace.Info("Agent OAuth token has been revoked. Session creation failed.");
                     throw;
@@ -193,7 +193,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
                     Trace.Info("Get next message has been cancelled.");
                     throw;
                 }
-                catch (TaskAgentAccessTokeExpiredException)
+                catch (TaskAgentAccessTokenExpiredException)
                 {
                     Trace.Info("Agent OAuth token has been revoked. Unable to pull message.");
                     throw;

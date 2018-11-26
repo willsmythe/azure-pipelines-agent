@@ -27,6 +27,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 
     public class ContainerOperationProvider : AgentService, IContainerOperationProvider
     {
+        private const string _nodeJsPathLabel = "com.azure.dev.pipelines.agent.handler.node.path";
         private IDockerCommandManager _dockerManger;
 
         public override void Initialize(IHostContext hostContext)
@@ -109,6 +110,27 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 throw new NotSupportedException(StringUtil.Loc("MinRequiredDockerClientVersion", requiredDockerVersion, _dockerManger.DockerPath, dockerVersion.ClientVersion));
             }
 
+            // Clean up containers left by previous runs
+            executionContext.Debug($"Delete stale containers from previous jobs");
+            var staleContainers = await _dockerManger.DockerPS(executionContext, $"--all --quiet --no-trunc --filter \"label={_dockerManger.DockerInstanceLabel}\"");
+            foreach (var staleContainer in staleContainers)
+            {
+                int containerRemoveExitCode = await _dockerManger.DockerRemove(executionContext, staleContainer);
+                if (containerRemoveExitCode != 0)
+                {
+                    executionContext.Warning($"Delete stale containers failed, docker rm fail with exit code {containerRemoveExitCode} for container {staleContainer}");
+                }
+            }
+
+#if !OS_WINDOWS
+            executionContext.Debug($"Delete stale container networks from previous jobs");
+            int networkPruneExitCode = await _dockerManger.DockerNetworkPrune(executionContext);
+            if (networkPruneExitCode != 0)
+            {
+                executionContext.Warning($"Delete stale container networks failed, docker network prune fail with exit code {networkPruneExitCode}");
+            }
+#endif
+
             // Login to private docker registry
             string registryServer = string.Empty;
             if (container.ContainerRegistryEndpoint != Guid.Empty)
@@ -181,7 +203,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 container.MountVolumes.Add(new MountVolume(HostContext.GetDirectory(WellKnownDirectory.Work), container.TranslateToContainerPath(HostContext.GetDirectory(WellKnownDirectory.Work))));
                 container.MountVolumes.Add(new MountVolume(HostContext.GetDirectory(WellKnownDirectory.Tools), container.TranslateToContainerPath(HostContext.GetDirectory(WellKnownDirectory.Tools))));
 #else
-                string workingDirectory = Path.GetDirectoryName(executionContext.Variables.Get(Constants.Variables.System.DefaultWorkingDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                string defaultWorkingDirectory = executionContext.Variables.Get(Constants.Variables.System.DefaultWorkingDirectory);
+                if (string.IsNullOrEmpty(defaultWorkingDirectory))
+                {
+                    throw new NotSupportedException(StringUtil.Loc("ContainerJobRequireSystemDefaultWorkDir"));
+                }
+
+                string workingDirectory = Path.GetDirectoryName(defaultWorkingDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
                 container.MountVolumes.Add(new MountVolume(container.TranslateToHostPath(workingDirectory), workingDirectory));
                 container.MountVolumes.Add(new MountVolume(HostContext.GetDirectory(WellKnownDirectory.Temp), container.TranslateToContainerPath(HostContext.GetDirectory(WellKnownDirectory.Temp))));
                 container.MountVolumes.Add(new MountVolume(HostContext.GetDirectory(WellKnownDirectory.Tools), container.TranslateToContainerPath(HostContext.GetDirectory(WellKnownDirectory.Tools))));
@@ -214,6 +242,19 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     }
                 }
 #endif
+                // See if this container brings its own Node.js
+                container.ContainerBringNodePath = await _dockerManger.DockerInspect(context: executionContext,
+                                                                      dockerObject: container.ContainerImage,
+                                                                      options: $"--format=\"{{{{index .Config.Labels \\\"{_nodeJsPathLabel}\\\"}}}}\"");
+
+                container.ContainerId = await _dockerManger.DockerCreate(context: executionContext,
+                                                                         displayName: container.ContainerDisplayName,
+                                                                         image: container.ContainerImage,
+                                                                         mountVolumes: container.MountVolumes,
+                                                                         network: container.ContainerNetwork,
+                                                                         options: container.ContainerCreateOptions,
+                                                                         environment: container.ContainerEnvironmentVariables);
+
                 // TODO Remove before merge
                 // container.ContainerId = await _dockerManger.DockerCreate(context: executionContext,
                 //                                                         displayName: container.ContainerDisplayName,
@@ -339,13 +380,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 // Create a new user with same UID
                 if (string.IsNullOrEmpty(containerUserName))
                 {
-                    containerUserName = $"{container.CurrentUserName}_VSTSContainer";
+                    containerUserName = $"{container.CurrentUserName}_azpcontainer";
                     int execUseraddExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"useradd -m -u {container.CurrentUserId} {containerUserName}");
                     if (execUseraddExitCode != 0)
                     {
                         throw new InvalidOperationException($"Docker exec fail with exit code {execUseraddExitCode}");
                     }
-                }
 
                 executionContext.Output(StringUtil.Loc("GrantContainerUserSUDOPrivilege", containerUserName));
 
@@ -382,13 +422,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 
             if (!string.IsNullOrEmpty(container.ContainerId))
             {
-                executionContext.Output($"Stop container: {container.ContainerDisplayName}");
-
-                int stopExitCode = await _dockerManger.DockerStop(executionContext, container.ContainerId);
-                if (stopExitCode != 0)
-                {
-                    executionContext.Error($"Docker stop fail with exit code {stopExitCode}");
-                }
+                executionContext.Output($"Stop and remove container: {container.ContainerDisplayName}");
 
                 int rmExitCode = await _dockerManger.DockerRemove(executionContext, container.ContainerId);
                 if (rmExitCode != 0)

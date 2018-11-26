@@ -48,7 +48,9 @@ namespace Agent.Plugins.Repository
             {
                 // the endpoint should either be the SystemVssConnection (id = guild.empty, name = SystemVssConnection)
                 // or a real service endpoint to external service which has a real id
-                var endpoint = executionContext.Endpoints.Single(x => (repository.Endpoint.Id != Guid.Empty && x.Id == repository.Endpoint.Id) || (repository.Endpoint.Id == Guid.Empty && string.Equals(x.Name, repository.Endpoint.Name, StringComparison.OrdinalIgnoreCase)));
+                var endpoint = executionContext.Endpoints.Single(
+                    x => (repository.Endpoint.Id != Guid.Empty && x.Id == repository.Endpoint.Id) ||
+                    (repository.Endpoint.Id == Guid.Empty && string.Equals(x.Name, repository.Endpoint.Name.ToString(), StringComparison.OrdinalIgnoreCase)));
                 ArgUtil.NotNull(endpoint, nameof(endpoint));
                 tf.Endpoint = endpoint;
             }
@@ -446,7 +448,9 @@ namespace Agent.Plugins.Repository
                 {
                     // the endpoint should either be the SystemVssConnection (id = guild.empty, name = SystemVssConnection)
                     // or a real service endpoint to external service which has a real id
-                    var endpoint = executionContext.Endpoints.Single(x => (repository.Endpoint.Id != Guid.Empty && x.Id == repository.Endpoint.Id) || (repository.Endpoint.Id == Guid.Empty && string.Equals(x.Name, repository.Endpoint.Name, StringComparison.OrdinalIgnoreCase)));
+                    var endpoint = executionContext.Endpoints.Single(
+                        x => (repository.Endpoint.Id != Guid.Empty && x.Id == repository.Endpoint.Id) ||
+                        (repository.Endpoint.Id == Guid.Empty && string.Equals(x.Name, repository.Endpoint.Name.ToString(), StringComparison.OrdinalIgnoreCase)));
                     ArgUtil.NotNull(endpoint, nameof(endpoint));
                     tf.Endpoint = endpoint;
                 }

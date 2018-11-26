@@ -59,7 +59,7 @@
   "CodeCoverageDataIsNull": "No coverage data found. Check the build errors/warnings for more details.",
   "CodeCoveragePublishIsValidOnlyForBuild": "Publishing code coverage works only for 'build'.",
   "CollectionName": "Collection Name",
-  "CommandKeywordDetected": "'{0}' contains logging command keyword '##vso', but it's not a legal command. Please reference documentation to fix any potentially syntax error (http://go.microsoft.com/fwlink/?LinkId=817296)",
+  "CommandKeywordDetected": "'{0}' contains logging command keyword '##vso', but it's not a legal command. Please see the list of accepted commands: https://go.microsoft.com/fwlink/?LinkId=817296",
   "CommandLineHelp": [
     "CLI-WIDTH-TOTAL-(105-CHARS)------------------------------------------------------------------------------",
     "Commands:",
@@ -206,6 +206,7 @@
   "ConnectingToServer": "Connecting to server ...",
   "ConnectSectionHeader": "Connect",
   "ConnectToServer": "Connecting to the server.",
+  "ContainerJobRequireSystemDefaultWorkDir": "System.DefaultWorkingDirectory is required for running a container job.",
   "ContainerWindowsVersionRequirement": "Container feature requires Windows Server 1803 or higher. Please reference documentation (https://go.microsoft.com/fwlink/?linkid=875268)",
   "CouldNotRemoveService": "Could not delete service '{0}'",
   "CreateUserWithSameUIDInsideContainer": "Try create an user with UID '{0}' inside the container.",
@@ -539,6 +540,8 @@
   "SvnNotInstalled": "Can't find installed svn command line utility",
   "SvnSyncingRepo": "Syncing repository: {0} (Svn)",
   "TaskCommandNotFound": "##vso[task.{0}] is not a recognized command for Task command extension. Please reference documentation (http://go.microsoft.com/fwlink/?LinkId=817296)",
+  "TaskDownloadFailed": "Failed to download task '{0}'. Error {1}",
+  "TaskDownloadTimeout": "Task '{0}' didn't finish download within {1} seconds.",
   "TeeEula": [
     "Building sources from a TFVC repository requires accepting the Team Explorer Everywhere End User License Agreement. This step is not required for building sources from Git repositories.",
     "",
