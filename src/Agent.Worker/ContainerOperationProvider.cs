@@ -247,13 +247,25 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                                                                       dockerObject: container.ContainerImage,
                                                                       options: $"--format=\"{{{{index .Config.Labels \\\"{_nodeJsPathLabel}\\\"}}}}\"");
 
-                container.ContainerId = await _dockerManger.DockerCreate(context: executionContext,
-                                                                         displayName: container.ContainerDisplayName,
-                                                                         image: container.ContainerImage,
-                                                                         mountVolumes: container.MountVolumes,
-                                                                         network: container.ContainerNetwork,
-                                                                         options: container.ContainerCreateOptions,
-                                                                         environment: container.ContainerEnvironmentVariables);
+                string node;
+                if (!string.IsNullOrEmpty(executionContext.Container.ContainerBringNodePath))
+                {
+                    node = executionContext.Container.ContainerBringNodePath;
+                }
+                else
+                {
+                    node = executionContext.Container.TranslateToContainerPath(Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Externals), "node", "bin", $"node{IOUtil.ExeExtension}"));
+                }
+                string sleepCommand = $"\"{node}\" -e \"setInterval(function(){{}}, 24 * 60 * 60 * 1000);\"";
+                container.ContainerCommand = sleepCommand;
+
+                // container.ContainerId = await _dockerManger.DockerCreate(context: executionContext,
+                //                                                          displayName: container.ContainerDisplayName,
+                //                                                          image: container.ContainerImage,
+                //                                                          mountVolumes: container.MountVolumes,
+                //                                                          network: container.ContainerNetwork,
+                //                                                          options: container.ContainerCreateOptions,
+                //                                                          environment: container.ContainerEnvironmentVariables);
 
                 // TODO Remove before merge
                 // container.ContainerId = await _dockerManger.DockerCreate(context: executionContext,
@@ -315,11 +327,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     try
                     {
                         // Make sure container is up and running
-                        var psOutputs = await _dockerManger.DockerPS(executionContext, container.ContainerId, "--filter status=running");
+                        var psOutputs = await _dockerManger.DockerPS(executionContext, $"--all --filter id={container.ContainerId} --filter status=running --no-trunc --format \"{{{{.ID}}}} {{{{.Status}}}}\"");
                         if (psOutputs.FirstOrDefault(x => !string.IsNullOrEmpty(x))?.StartsWith(container.ContainerId) != true)
                         {
                             // container is not up and running, pull docker log for this container.
-                            await _dockerManger.DockerPS(executionContext, container.ContainerId, string.Empty);
+                            await _dockerManger.DockerPS(executionContext, $"--all --filter id={container.ContainerId} --no-trunc --format \"{{{{.ID}}}} {{{{.Status}}}}\"");
                             int logsExitCode = await _dockerManger.DockerLogs(executionContext, container.ContainerId);
                             if (logsExitCode != 0)
                             {
@@ -386,6 +398,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     {
                         throw new InvalidOperationException($"Docker exec fail with exit code {execUseraddExitCode}");
                     }
+                }
 
                 executionContext.Output(StringUtil.Loc("GrantContainerUserSUDOPrivilege", containerUserName));
 

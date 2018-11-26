@@ -108,6 +108,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             IList<string> dockerOptions = new List<string>();
             // OPTIONS
             dockerOptions.Add($"--name {container.ContainerDisplayName}");
+            dockerOptions.Add($"--label {DockerInstanceLabel}");
             if (!string.IsNullOrEmpty(container.ContainerNetwork))
             {
                 dockerOptions.Add($"--network {container.ContainerNetwork}");
