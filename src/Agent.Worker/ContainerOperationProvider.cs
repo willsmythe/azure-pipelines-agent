@@ -17,7 +17,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
     [ServiceLocator(Default = typeof(ContainerOperationProvider))]
     public interface IContainerOperationProvider : IAgentService
     {
-        Task StartContainerAsync(IExecutionContext executionContext, object data);
         Task StopContainerAsync(IExecutionContext executionContext, object data);
         Task CreateContainerNetworkAsync(IExecutionContext executionContext, object data);
         Task RemoveContainerNetworkAsync(IExecutionContext executionContext, object data);
@@ -36,7 +35,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             _dockerManger = HostContext.GetService<IDockerCommandManager>();
         }
 
-        public async Task StartContainerAsync(IExecutionContext executionContext, object data)
+        private async Task StartContainerAsync(IExecutionContext executionContext, object data)
         {
             Trace.Entering();
             ArgUtil.NotNull(executionContext, nameof(executionContext));
@@ -109,27 +108,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             {
                 throw new NotSupportedException(StringUtil.Loc("MinRequiredDockerClientVersion", requiredDockerVersion, _dockerManger.DockerPath, dockerVersion.ClientVersion));
             }
-
-            // Clean up containers left by previous runs
-            executionContext.Debug($"Delete stale containers from previous jobs");
-            var staleContainers = await _dockerManger.DockerPS(executionContext, $"--all --quiet --no-trunc --filter \"label={_dockerManger.DockerInstanceLabel}\"");
-            foreach (var staleContainer in staleContainers)
-            {
-                int containerRemoveExitCode = await _dockerManger.DockerRemove(executionContext, staleContainer);
-                if (containerRemoveExitCode != 0)
-                {
-                    executionContext.Warning($"Delete stale containers failed, docker rm fail with exit code {containerRemoveExitCode} for container {staleContainer}");
-                }
-            }
-
-#if !OS_WINDOWS
-            executionContext.Debug($"Delete stale container networks from previous jobs");
-            int networkPruneExitCode = await _dockerManger.DockerNetworkPrune(executionContext);
-            if (networkPruneExitCode != 0)
-            {
-                executionContext.Warning($"Delete stale container networks failed, docker network prune fail with exit code {networkPruneExitCode}");
-            }
-#endif
 
             // Login to private docker registry
             string registryServer = string.Empty;
@@ -519,6 +497,26 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
         {
             Trace.Entering();
             ArgUtil.NotNull(executionContext, nameof(executionContext));
+
+#if !OS_WINDOWS
+            executionContext.Debug($"Delete stale container networks from previous jobs");
+            int networkPruneExitCode = await _dockerManger.DockerNetworkPrune(executionContext);
+            if (networkPruneExitCode != 0)
+            {
+                executionContext.Warning($"Delete stale container networks failed, docker network prune fail with exit code {networkPruneExitCode}");
+            }
+#endif
+            // Clean up containers left by previous runs
+            executionContext.Debug($"Delete stale containers from previous jobs");
+            var staleContainers = await _dockerManger.DockerPS(executionContext, $"--all --quiet --no-trunc --filter \"label={_dockerManger.DockerInstanceLabel}\"");
+            foreach (var staleContainer in staleContainers)
+            {
+                int containerRemoveExitCode = await _dockerManger.DockerRemove(executionContext, staleContainer);
+                if (containerRemoveExitCode != 0)
+                {
+                    executionContext.Warning($"Delete stale containers failed, docker rm fail with exit code {containerRemoveExitCode} for container {staleContainer}");
+                }
+            }
 
             List<ContainerInfo> containers = data as List<ContainerInfo>;
             ArgUtil.NotNull(containers, nameof(containers));
