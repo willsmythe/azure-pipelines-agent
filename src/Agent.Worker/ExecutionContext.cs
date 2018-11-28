@@ -439,7 +439,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     var targetPorts = new Dictionary<string, string>();
                     foreach (var port in containerResource.Ports)
                     {
-                        targetPorts.Add(port, port);
+                        targetPorts.TryAdd(port, port);
                     }
                     Variables.ExpandValues(targetPorts);
                     foreach (var kv in targetPorts)
