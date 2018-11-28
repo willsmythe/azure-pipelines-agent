@@ -242,40 +242,25 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     }
                 }
 #endif
-                // See if this container brings its own Node.js
-                container.ContainerBringNodePath = await _dockerManger.DockerInspect(context: executionContext,
-                                                                      dockerObject: container.ContainerImage,
-                                                                      options: $"--format=\"{{{{index .Config.Labels \\\"{_nodeJsPathLabel}\\\"}}}}\"");
-
-                string node;
-                if (!string.IsNullOrEmpty(executionContext.Container.ContainerBringNodePath))
+                if (container.IsJobContainer)
                 {
-                    node = executionContext.Container.ContainerBringNodePath;
-                }
-                else
-                {
-                    node = executionContext.Container.TranslateToContainerPath(Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Externals), "node", "bin", $"node{IOUtil.ExeExtension}"));
-                }
-                string sleepCommand = $"\"{node}\" -e \"setInterval(function(){{}}, 24 * 60 * 60 * 1000);\"";
-                container.ContainerCommand = sleepCommand;
+                    // See if this container brings its own Node.js
+                    container.ContainerBringNodePath = await _dockerManger.DockerInspect(context: executionContext,
+                                                                        dockerObject: container.ContainerImage,
+                                                                        options: $"--format=\"{{{{index .Config.Labels \\\"{_nodeJsPathLabel}\\\"}}}}\"");
 
-                // container.ContainerId = await _dockerManger.DockerCreate(context: executionContext,
-                //                                                          displayName: container.ContainerDisplayName,
-                //                                                          image: container.ContainerImage,
-                //                                                          mountVolumes: container.MountVolumes,
-                //                                                          network: container.ContainerNetwork,
-                //                                                          options: container.ContainerCreateOptions,
-                //                                                          environment: container.ContainerEnvironmentVariables);
-
-                // TODO Remove before merge
-                // container.ContainerId = await _dockerManger.DockerCreate(context: executionContext,
-                //                                                         displayName: container.ContainerDisplayName,
-                //                                                         image: container.ContainerImage,
-                //                                                         mountVolumes: container.MountVolumes,
-                //                                                         network: container.ContainerNetwork,
-                //                                                         options: container.ContainerCreateOptions,
-                //                                                         environment: container.ContainerEnvironmentVariables,
-                //                                                         command: container.ContainerCommand);
+                    string node;
+                    if (!string.IsNullOrEmpty(container.ContainerBringNodePath))
+                    {
+                        node = container.ContainerBringNodePath;
+                    }
+                    else
+                    {
+                        node = container.TranslateToContainerPath(Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Externals), "node", "bin", $"node{IOUtil.ExeExtension}"));
+                    }
+                    string sleepCommand = $"\"{node}\" -e \"setInterval(function(){{}}, 24 * 60 * 60 * 1000);\"";
+                    container.ContainerCommand = sleepCommand;
+                }
 
                 container.ContainerId = await _dockerManger.DockerCreate(executionContext, container);
                 ArgUtil.NotNullOrEmpty(container.ContainerId, nameof(container.ContainerId));
@@ -292,8 +277,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 }
 
                 // Get port mappings of running container
-                if (executionContext.Container == null
-                    && !container.IsJobContainer)
+                if (executionContext.Container == null && !container.IsJobContainer)
                 {
                     container.PortMappings = await _dockerManger.DockerPort(executionContext, container.ContainerId);
                     foreach (var port in container.PortMappings)

@@ -48,10 +48,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             if (this.IsJobContainer)
             {
                 this.MountVolumes.Add(new MountVolume("/var/run/docker.sock", "/var/run/docker.sock"));
-
-                string node = TranslateToContainerPath(Path.Combine(hostContext.GetDirectory(WellKnownDirectory.Externals), "node", "bin", $"node{IOUtil.ExeExtension}"));
-                string sleepCommand = $"\"{node}\" -e \"setInterval(function(){{}}, 24 * 60 * 60 * 1000);\"";
-                this.ContainerCommand = sleepCommand;
             }
         }
 
