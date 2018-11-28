@@ -434,13 +434,22 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     var networkAlias = sidecar.Key;
                     var containerResourceAlias = sidecar.Value;
                     var containerResource = message.Resources.Containers.Single(c => string.Equals(c.Alias, containerResourceAlias, StringComparison.OrdinalIgnoreCase));
+                    
                     var newPorts = new List<string>();
+                    var targetPorts = new Dictionary<string, string>();
                     foreach (var port in containerResource.Ports)
                     {
-                        newPorts.Add(VariableUtility.ExpandVariables(port, null));
-                        // VarUtil.ExpandValues(context: this, Variables.)
+                        targetPorts.Add(port, port);
                     }
+                    Variables.ExpandValues(targetPorts);
+                    foreach (var kv in targetPorts)
+                    {
+                        newPorts.Add(kv.Value);
+                    }
+                    // VarUtil.ExpandValues(HostContext, new Dictionary<string, string>(), targetPorts);
+
                     containerResource.Ports = newPorts;
+                    
                     SidecarContainers.Add(new ContainerInfo(HostContext, containerResource, isJobContainer: false) { ContainerNetworkAlias = networkAlias });
                 }
             }
