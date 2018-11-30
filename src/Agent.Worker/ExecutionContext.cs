@@ -435,6 +435,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     var containerResourceAlias = sidecar.Value;
                     var containerResource = message.Resources.Containers.Single(c => string.Equals(c.Alias, containerResourceAlias, StringComparison.OrdinalIgnoreCase));
                     
+                    // TODO: reconcile or refactor how ports and volumes are expanded before merge. WIP
                     if (containerResource.Ports?.Count > 0)
                     {
                         var newPorts = new List<string>();
@@ -450,6 +451,16 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                         }
                         // VarUtil.ExpandValues(HostContext, new Dictionary<string, string>(), targetPorts);
                         containerResource.Ports = newPorts;
+                    }
+
+                    if (containerResource.Volumes?.Count > 0)
+                    {
+                        //var targetVolumes = new Dictionary<string, string>();
+                        var targetVolumes = containerResource.Volumes.ToDictionary(v => v, StringComparer.OrdinalIgnoreCase);
+
+                        VarUtil.ExpandValues(HostContext, new Dictionary<string, string>(Variables.Public), targetVolumes);
+
+                        containerResource.Ports = targetVolumes.Select(kv => kv.Value).ToList();
                     }
                     
                     SidecarContainers.Add(new ContainerInfo(HostContext, containerResource, isJobContainer: false) { ContainerNetworkAlias = networkAlias });
