@@ -442,16 +442,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                             targetPorts.TryAdd(port, port);
                         }
                         Variables.ExpandValues(targetPorts);
-                        // containerResource.Ports = targetPorts.Select(kv => kv.Value).ToList();
                         containerResource.Ports = targetPorts.Values.ToList();
-                        foreach (var kv in targetPorts)
-                        {
-                            Trace.Info($"Port key: {kv.Key} Value: {kv.Value}");
-                        }
-                        foreach (var port in containerResource.Ports)
-                        {
-                            Trace.Info($"Port entry: {port}");
-                        }
                     }
 
                     if (containerResource.Volumes?.Count > 0)
@@ -462,16 +453,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                             targetVolumes.TryAdd(volume, volume);
                         }
                         Variables.ExpandValues(targetVolumes);
-                        // containerResource.Volumes = targetVolumes.Select(kv => kv.Value).ToList();
                         containerResource.Volumes = targetVolumes.Values.ToList();
-                        foreach (var kv in targetVolumes)
-                        {
-                            Trace.Info($"Volume key: {kv.Key} Value: {kv.Value}");
-                        }
-                        foreach (var volume in containerResource.Volumes)
-                        {
-                            Trace.Info($"Volume entry: {volume}");
-                        }
                     }
                     
                     SidecarContainers.Add(new ContainerInfo(HostContext, containerResource, isJobContainer: false) { ContainerNetworkAlias = networkAlias });
