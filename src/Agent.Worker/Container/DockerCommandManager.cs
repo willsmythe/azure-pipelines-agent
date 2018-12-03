@@ -19,8 +19,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         Task<int> DockerLogout(IExecutionContext context, string server);
         Task<int> DockerPull(IExecutionContext context, string image);
         Task<string> DockerCreate(IExecutionContext context, ContainerInfo container);
-        // TODO: Remove before merge
-        // Task<string> DockerCreate(IExecutionContext context, string displayName, string image, List<MountVolume> mountVolumes, string network, string options, IDictionary<string, string> environment, string command);
         Task<int> DockerStart(IExecutionContext context, string containerId);
         Task<int> DockerLogs(IExecutionContext context, string containerId);
         Task<List<string>> DockerPS(IExecutionContext context, string options);
