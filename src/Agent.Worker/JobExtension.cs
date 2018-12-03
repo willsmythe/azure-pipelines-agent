@@ -6,7 +6,6 @@ using Microsoft.TeamFoundation.DistributedTask.WebApi;
 using Pipelines = Microsoft.TeamFoundation.DistributedTask.Pipelines;
 using Microsoft.VisualStudio.Services.Agent.Util;
 using System.Linq;
-using Environment = System.Environment;
 
 namespace Microsoft.VisualStudio.Services.Agent.Worker
 {

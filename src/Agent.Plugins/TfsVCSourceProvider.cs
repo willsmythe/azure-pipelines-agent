@@ -12,7 +12,6 @@ using Agent.Sdk;
 using Pipelines = Microsoft.TeamFoundation.DistributedTask.Pipelines;
 using Microsoft.Win32;
 using Microsoft.VisualStudio.Services.Agent.Util;
-using Environment = System.Environment;
 
 namespace Agent.Plugins.Repository
 {

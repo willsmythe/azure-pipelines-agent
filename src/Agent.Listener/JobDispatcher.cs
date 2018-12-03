@@ -10,7 +10,6 @@ using Microsoft.VisualStudio.Services.WebApi;
 using Pipelines = Microsoft.TeamFoundation.DistributedTask.Pipelines;
 using System.Linq;
 using Microsoft.VisualStudio.Services.Common;
-using Environment = System.Environment;
 
 namespace Microsoft.VisualStudio.Services.Agent.Listener
 {
