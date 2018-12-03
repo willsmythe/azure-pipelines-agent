@@ -121,7 +121,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                 if (!string.IsNullOrEmpty(port.HostPort) && !string.IsNullOrEmpty(port.ContainerPort))
                 {
                     portArg = $"-p {port.HostPort}:{port.ContainerPort}";
-
                 }
                 else if (string.IsNullOrEmpty(port.HostPort) && !string.IsNullOrEmpty(port.ContainerPort))
                 {
@@ -264,6 +263,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                             outputEncoding: null,
                             cancellationToken: CancellationToken.None);
         }
+
         public async Task<string> DockerInspect(IExecutionContext context, string dockerObject, string options)
         {
             return (await ExecuteDockerCommandAsync(context, "inspect", $"{options} {dockerObject}")).FirstOrDefault();
@@ -275,17 +275,15 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             const string proto = "proto";
             const string host = "host";
             const string hostPort = "hostPort";
-            Regex rx = new Regex(
-                //"TARGET_PORT/PROTO -> HOST:HOST_PORT"
-                $"^(?<{targetPort}>\\d+)/(?<{proto}>\\w+) -> (?<{host}>.+):(?<{hostPort}>\\d+)$",
-                RegexOptions.None,
-                TimeSpan.FromSeconds(1)
-            );
+
+            //"TARGET_PORT/PROTO -> HOST:HOST_PORT"
+            string pattern = $"^(?<{targetPort}>\\d+)/(?<{proto}>\\w+) -> (?<{host}>.+):(?<{hostPort}>\\d+)$";
+
             List<string> portMappingLines = await ExecuteDockerCommandAsync(context, "port", containerId);
             List<PortMapping> portMappings = new List<PortMapping>();
             foreach(var line in portMappingLines)
             {
-                Match m = rx.Match(line);
+                Match m = Regex.Match(line, pattern, RegexOptions.None, TimeSpan.FromSeconds(1));
                 if (m.Success)
                 {
                     portMappings.Add(new PortMapping(

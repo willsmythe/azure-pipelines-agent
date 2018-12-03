@@ -191,14 +191,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                 foreach (var volume in volumes)
                 {
                     var volumeSplit = volume.Split(":");
-                    if (volumeSplit?.Length == 3)
+                    if (volumeSplit.Length == 3)
                     {
                         // source:target:ro
-                        mountVolumes.Add(new MountVolume(volumeSplit[0], volumeSplit[1], String.Equals(volumeSplit[2], "ro")));
+                        mountVolumes.Add(new MountVolume(volumeSplit[0], volumeSplit[1], String.Equals(volumeSplit[2], "ro", StringComparison.OrdinalIgnoreCase)));
                     }
-                    else if (volumeSplit?.Length == 2)
+                    else if (volumeSplit.Length == 2)
                     {
-                        if (String.Equals(volumeSplit[1], "ro"))
+                        if (String.Equals(volumeSplit[1], "ro", StringComparison.OrdinalIgnoreCase))
                         {
                             // target:ro
                             mountVolumes.Add(new MountVolume(null, volumeSplit[0], true));
@@ -229,18 +229,18 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                     var protoSplit = port.Split("/");
                     String portString;
                     String protoString = null;
-                    if (protoSplit?.Length == 2)
+                    if (protoSplit.Length == 2)
                     {
                         protoString = protoSplit[1];
                     }
                     portString = protoSplit[0];
                     var portSplit = portString.Split(":");
-                    if (portSplit?.Length == 3)
+                    if (portSplit.Length == 3)
                     {
                         // host:hostport:targetport
                         portMappings.Add(new PortMapping($"{portSplit[0]}:{portSplit[1]}", portSplit[2], protoString));
                     }
-                    else if (portSplit?.Length == 2)
+                    else if (portSplit.Length == 2)
                     {
                         // hostport:targetport
                         portMappings.Add(new PortMapping(portSplit[0], portSplit[1], protoString));
