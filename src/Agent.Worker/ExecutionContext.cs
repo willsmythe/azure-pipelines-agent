@@ -424,7 +424,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 Container = null;
             }
 
-            // Docker (Sidecar Containers)
+            // Sidecar Containers
             if (message.JobSidecarContainers?.Count > 0)
             {
                 SidecarContainers = new List<ContainerInfo>();
@@ -434,29 +434,23 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     var containerResourceAlias = sidecar.Value;
                     var containerResource = message.Resources.Containers.Single(c => string.Equals(c.Alias, containerResourceAlias, StringComparison.OrdinalIgnoreCase));
                     
+                    var sidecarContainer = new ContainerInfo(HostContext, containerResource, isJobContainer: false) { ContainerNetworkAlias = networkAlias };
                     if (containerResource.Ports?.Count > 0)
                     {
-                        var targetPorts = new Dictionary<string, string>();
                         foreach (var port in containerResource.Ports)
                         {
-                            targetPorts.TryAdd(port, port);
+                            sidecarContainer.PortMappings.Add(new PortMapping(port, isExpanded: false));
                         }
-                        Variables.ExpandValues(targetPorts);
-                        containerResource.Ports = targetPorts.Values.ToList();
                     }
-
                     if (containerResource.Volumes?.Count > 0)
                     {
-                        var targetVolumes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                         foreach (var volume in containerResource.Volumes)
                         {
-                            targetVolumes.TryAdd(volume, volume);
+                            sidecarContainer.MountVolumes.Add(new MountVolume(volume, isExpanded: false));
                         }
-                        Variables.ExpandValues(targetVolumes);
-                        containerResource.Volumes = targetVolumes.Values.ToList();
                     }
-                    
-                    SidecarContainers.Add(new ContainerInfo(HostContext, containerResource, isJobContainer: false) { ContainerNetworkAlias = networkAlias });
+
+                    SidecarContainers.Add(sidecarContainer);
                 }
             }
 

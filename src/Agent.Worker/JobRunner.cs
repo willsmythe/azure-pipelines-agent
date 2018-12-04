@@ -218,6 +218,35 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     }
                 }
 
+                // Expand sidecar container properties
+                if (jobContext.SidecarContainers?.Count > 0)
+                {
+                    foreach (var sidecar in jobContext.SidecarContainers)
+                    {
+                        // Expand port mapping
+                        var targetPorts = new Dictionary<string, string>();
+                        foreach (var port in sidecar.PortMappings)
+                        {
+                            targetPorts.TryAdd(port.Raw, port.Raw);
+                        }
+                        jobContext.Variables.ExpandValues(targetPorts);
+                        sidecar.PortMappings = targetPorts.Values.Select(
+                            port => new Container.PortMapping(port, isExpanded: true)
+                        ).ToList();
+
+                        // Expand volume mounts
+                        var targetVolumes = new Dictionary<string, string>();
+                        foreach (var volume in sidecar.MountVolumes)
+                        {
+                            targetVolumes.Add(volume.Raw, volume.Raw);
+                        }
+                        jobContext.Variables.ExpandValues(targetVolumes);
+                        sidecar.MountVolumes = targetVolumes.Values.Select(
+                            volume => new Container.MountVolume(volume, isExpanded: true)
+                        ).ToList();
+                    }
+                }
+
                 // Get the job extension.
                 Trace.Info("Getting job extension.");
                 var hostType = jobContext.Variables.System_HostType;

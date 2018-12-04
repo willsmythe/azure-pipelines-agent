@@ -32,6 +32,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             this.SkipContainerImagePull = container.Properties.Get<bool>("localimage");
             this.ContainerEnvironmentVariables = container.Environment;
             this.ContainerCommand = container.Properties.Get<string>("command", defaultValue: "");
+            this.IsJobContainer = isJobContainer;
 
 #if OS_WINDOWS
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Tools)] = "C:\\__t"; // Tool cache folder may come from ENV, so we need a unique folder to avoid collision
@@ -41,14 +42,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Tools)] = "/__t"; // Tool cache folder may come from ENV, so we need a unique folder to avoid collision
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Work)] = "/__w";
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Root)] = "/__a";
-#endif
-            this.PortMappings.AddRange(ParsePorts(container.Ports));
-            this.MountVolumes.AddRange(ParseVolumes(container.Volumes));
-            this.IsJobContainer = isJobContainer;
             if (this.IsJobContainer)
             {
                 this.MountVolumes.Add(new MountVolume("/var/run/docker.sock", "/var/run/docker.sock"));
             }
+#endif
         }
 
         public string ContainerId { get; set; }
@@ -95,6 +93,10 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                 }
 
                 return _mountVolumes;
+            }
+            set
+            {
+                _mountVolumes = value;
             }
         }
 
@@ -182,78 +184,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
 
             return path;
         }
-
-        private List<MountVolume> ParseVolumes(IList<string> volumes)
-        {
-            List<MountVolume> mountVolumes = new List<MountVolume>();
-            if (volumes?.Count > 0)
-            {
-                foreach (var volume in volumes)
-                {
-                    var volumeSplit = volume.Split(":");
-                    if (volumeSplit.Length == 3)
-                    {
-                        // source:target:ro
-                        mountVolumes.Add(new MountVolume(volumeSplit[0], volumeSplit[1], String.Equals(volumeSplit[2], "ro", StringComparison.OrdinalIgnoreCase)));
-                    }
-                    else if (volumeSplit.Length == 2)
-                    {
-                        if (String.Equals(volumeSplit[1], "ro", StringComparison.OrdinalIgnoreCase))
-                        {
-                            // target:ro
-                            mountVolumes.Add(new MountVolume(null, volumeSplit[0], true));
-                        }
-                        else
-                        {
-                            // source:target
-                            mountVolumes.Add(new MountVolume(volumeSplit[0], volumeSplit[1]));
-                        }
-                    }
-                    else
-                    {
-                        // target - or, default to passing straight through
-                        mountVolumes.Add(new MountVolume(null, volume));
-                    }
-                }
-            }
-            return mountVolumes;
-        }
-
-        private List<PortMapping> ParsePorts(IList<string> ports)
-        {
-            List<PortMapping> portMappings = new List<PortMapping>();
-            if (ports?.Count > 0)
-            {
-                foreach (var port in ports)
-                {
-                    var protoSplit = port.Split("/");
-                    String portString;
-                    String protoString = null;
-                    if (protoSplit.Length == 2)
-                    {
-                        protoString = protoSplit[1];
-                    }
-                    portString = protoSplit[0];
-                    var portSplit = portString.Split(":");
-                    if (portSplit.Length == 3)
-                    {
-                        // host:hostport:targetport
-                        portMappings.Add(new PortMapping($"{portSplit[0]}:{portSplit[1]}", portSplit[2], protoString));
-                    }
-                    else if (portSplit.Length == 2)
-                    {
-                        // hostport:targetport
-                        portMappings.Add(new PortMapping(portSplit[0], portSplit[1], protoString));
-                    }
-                    else
-                    {
-                        // target - or, default to passing straight through
-                        portMappings.Add(new PortMapping(null, port, protoString));
-                    }
-                }
-            }
-            return portMappings;
-        }
     }
 
     public class MountVolume
@@ -263,11 +193,61 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             this.SourceVolumePath = sourceVolumePath;
             this.TargetVolumePath = targetVolumePath;
             this.ReadOnly = readOnly;
+            this.IsExpanded = true;
+        }
+
+        public MountVolume(string raw, bool isExpanded)
+        {
+            this.IsExpanded = isExpanded;
+            if (this.IsExpanded)
+            {
+                ParseVolumeString(raw);
+            }
+            else
+            {
+                this.Raw = raw;
+            }
+        }
+
+        private void ParseVolumeString(string volume)
+        {
+            var volumeSplit = volume.Split(":");
+            if (volumeSplit.Length == 3)
+            {
+                // source:target:ro
+                SourceVolumePath = volumeSplit[0];
+                TargetVolumePath = volumeSplit[1];
+                ReadOnly = String.Equals(volumeSplit[2], "ro", StringComparison.OrdinalIgnoreCase);
+            }
+            else if (volumeSplit.Length == 2)
+            {
+                if (String.Equals(volumeSplit[1], "ro", StringComparison.OrdinalIgnoreCase))
+                {
+                    // target:ro
+                    TargetVolumePath = volumeSplit[0];
+                    ReadOnly = true;
+                }
+                else
+                {
+                    // source:target
+                    SourceVolumePath = volumeSplit[0];
+                    TargetVolumePath = volumeSplit[1];
+                    ReadOnly = false;
+                }
+            }
+            else
+            {
+                // target - or, default to passing straight through
+                TargetVolumePath = volume;
+                ReadOnly = false;
+            }
         }
 
         public string SourceVolumePath { get; set; }
         public string TargetVolumePath { get; set; }
         public bool ReadOnly { get; set; }
+        public bool IsExpanded { get; set; }
+        public string Raw { get; set; }
     }
 
     public class PortMapping
@@ -277,11 +257,60 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             this.HostPort = hostPort;
             this.ContainerPort = containerPort;
             this.Protocol = protocol;
+            this.IsExpanded = true;
+        }
+
+        public PortMapping(string raw, bool isExpanded)
+        {
+            this.IsExpanded = isExpanded;
+            if (this.IsExpanded)
+            {
+                ParsePortString(raw);
+            }
+            else
+            {
+                this.Raw = raw;
+            }
+        }
+
+        private void ParsePortString(string port)
+        {
+            var protoSplit = port.Split("/");
+            String portString;
+            String protoString = null;
+            if (protoSplit.Length == 2)
+            {
+                protoString = protoSplit[1];
+            }
+            portString = protoSplit[0];
+            var portSplit = portString.Split(":");
+            if (portSplit.Length == 3)
+            {
+                // host:hostport:targetport
+                HostPort = $"{portSplit[0]}:{portSplit[1]}";
+                ContainerPort = portSplit[2];
+                Protocol = protoString;
+            }
+            else if (portSplit.Length == 2)
+            {
+                // hostport:targetport
+                HostPort = portSplit[0];
+                ContainerPort = portSplit[1];
+                Protocol = protoString;
+            }
+            else
+            {
+                // target - or, default to passing straight through
+                ContainerPort = port;
+                Protocol = protoString;
+            }
         }
 
         public string HostPort { get; set; }
         public string ContainerPort { get; set; }
         public string Protocol { get; set; }
+        public bool IsExpanded { get; set; }
+        public string Raw { get; set; }
     }
 
     public class DockerVersion
