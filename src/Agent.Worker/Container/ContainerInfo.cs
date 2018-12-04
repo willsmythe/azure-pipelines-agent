@@ -47,6 +47,20 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                 this.MountVolumes.Add(new MountVolume("/var/run/docker.sock", "/var/run/docker.sock"));
             }
 #endif
+            if (container.Ports?.Count > 0)
+            {
+                foreach (var port in container.Ports)
+                {
+                    PortMappings.Add(new PortMapping(port, isExpanded: false));
+                }
+            }
+            if (container.Volumes?.Count > 0)
+            {
+                foreach (var volume in container.Volumes)
+                {
+                    MountVolumes.Add(new MountVolume(volume, isExpanded: false));
+                }
+            }
         }
 
         public string ContainerId { get; set; }
