@@ -15,6 +15,11 @@ namespace Agent.Plugins.Log
 
         private string _fileName = $"{Guid.NewGuid().ToString("N")}.log";
 
+        public Task<bool> InitializeAsync(IAgentLogPluginContext context)
+        {
+            return Task.FromResult(true);
+        }
+
         public Task ProcessLineAsync(IAgentLogPluginContext context, Pipelines.TaskStepDefinitionReference step, string output)
         {
             context.Trace("DEBUG_PROCESS");

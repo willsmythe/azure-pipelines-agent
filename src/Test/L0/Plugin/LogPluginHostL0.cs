@@ -159,6 +159,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.LogPluginHost
                 return Task.CompletedTask;
             }
 
+            public Task<bool> InitializeAsync(IAgentLogPluginContext context)
+            {
+                return Task.FromResult(true);
+            }
+
             public Task ProcessLineAsync(IAgentLogPluginContext context, Pipelines.TaskStepDefinitionReference step, string line)
             {
                 context.Output(line);
@@ -176,9 +181,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.LogPluginHost
                 return Task.CompletedTask;
             }
 
+<<<<<<< HEAD
+=======
+            public Task<bool> InitializeAsync(IAgentLogPluginContext context)
+            }
+
+>>>>>>> f3f22d3a2bda22979747ce04f9ddd0dd9afeefaf
             public Task ProcessLineAsync(IAgentLogPluginContext context, Pipelines.TaskStepDefinitionReference step, string line)
             {
-                context.Output(line);
                 return Task.CompletedTask;
             }
         }
@@ -191,6 +201,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.LogPluginHost
             {
                 context.Output("Done");
                 return Task.CompletedTask;
+            }
+
+            public Task<bool> InitializeAsync(IAgentLogPluginContext context)
+            {
+                return Task.FromResult(true);
             }
 
             public async Task ProcessLineAsync(IAgentLogPluginContext context, Pipelines.TaskStepDefinitionReference step, string line)
@@ -209,6 +224,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.LogPluginHost
             {
                 context.Output("Done");
                 return Task.CompletedTask;
+            }
+
+            public Task<bool> InitializeAsync(IAgentLogPluginContext context)
+            {
+                return Task.FromResult(true);
             }
 
             public async Task ProcessLineAsync(IAgentLogPluginContext context, Pipelines.TaskStepDefinitionReference step, string line)

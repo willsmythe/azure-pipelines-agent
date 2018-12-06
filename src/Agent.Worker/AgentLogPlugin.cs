@@ -180,7 +180,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 Trace.Info("Waiting for plugin host exit");
                 foreach (var plugin in _logPlugins)
                 {
-                    context.Output($"Waiting for log plugin '{plugin.Value.FriendlyName}' to finish.");
+                    context.Debug($"Waiting for log plugin '{plugin.Value.FriendlyName}' to finish.");
                 }
 
                 while (!_pluginHostProcess.IsCompleted)

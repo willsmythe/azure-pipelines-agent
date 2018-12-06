@@ -20,6 +20,11 @@ namespace Agent.Sdk
     {
         string FriendlyName { get; }
 
+<<<<<<< HEAD
+=======
+        Task<bool> InitializeAsync(IAgentLogPluginContext context);
+
+>>>>>>> f3f22d3a2bda22979747ce04f9ddd0dd9afeefaf
         Task ProcessLineAsync(IAgentLogPluginContext context, Pipelines.TaskStepDefinitionReference step, string line);
 
         Task FinalizeAsync(IAgentLogPluginContext context);
@@ -424,7 +429,34 @@ namespace Agent.Sdk
             List<string> errors = new List<string>();
             string typeName = plugin.GetType().FullName;
             var context = _pluginContexts[typeName];
-            using (var registration = token.Register(() => { context.Output($"Pending process {_outputQueue[typeName].Count} log lines."); }))
+
+            bool initialized = false;
+            try
+            {
+                initialized = await plugin.InitializeAsync(context);
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Fail to initialize: {ex.Message}.");
+                context.Trace(ex.ToString());
+            }
+            finally
+            {
+                if (!initialized)
+                {
+                    context.Output("Skip process outputs base on plugin initialize result.");
+                    _shortCircuited[typeName].TrySetResult(0);
+                }
+            }
+
+            using (var registration = token.Register(() =>
+                                      {
+                                          var depth = _outputQueue[typeName].Count;
+                                          if (depth > 0)
+                                          {
+                                              context.Output($"Pending process {depth} log lines.");
+                                          }
+                                      }))
             {
                 while (!_shortCircuited[typeName].Task.IsCompleted && !token.IsCancellationRequested)
                 {
@@ -486,7 +518,11 @@ namespace Agent.Sdk
             // print out the plugin has been short circuited.
             if (_shortCircuited[typeName].Task.IsCompleted)
             {
-                context.Output($"Plugin '{plugin.FriendlyName}' has been short circuited due to exceed memory usage limit.");
+                if (initialized)
+                {
+                    context.Output($"Plugin has been short circuited due to exceed memory usage limit.");
+                }
+
                 _outputQueue[typeName].Clear();
             }
 
@@ -495,7 +531,7 @@ namespace Agent.Sdk
             {
                 foreach (var error in errors)
                 {
-                    context.Output($"Plugin '{plugin.FriendlyName}' fail to process output: {error}");
+                    context.Output($"Fail to process output: {error}");
                 }
             }
         }
