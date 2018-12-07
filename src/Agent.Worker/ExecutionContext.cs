@@ -424,17 +424,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 Container = null;
             }
 
-            // Sidecar Containers
-            if (message.JobSidecarContainers?.Count > 0)
+            // Docker (Sidecar Containers)
+            SidecarContainers = new List<ContainerInfo>();
+            foreach (var sidecar in message.JobSidecarContainers)
             {
-                SidecarContainers = new List<ContainerInfo>();
-                foreach (var sidecar in message.JobSidecarContainers)
-                {
-                    var networkAlias = sidecar.Key;
-                    var containerResourceAlias = sidecar.Value;
-                    var containerResource = message.Resources.Containers.Single(c => string.Equals(c.Alias, containerResourceAlias, StringComparison.OrdinalIgnoreCase));
-                    SidecarContainers.Add(new ContainerInfo(HostContext, containerResource, isJobContainer: false) { ContainerNetworkAlias = networkAlias });
-                }
+                var networkAlias = sidecar.Key;
+                var containerResourceAlias = sidecar.Value;
+                var containerResource = message.Resources.Containers.Single(c => string.Equals(c.Alias, containerResourceAlias, StringComparison.OrdinalIgnoreCase));
+                SidecarContainers.Add(new ContainerInfo(HostContext, containerResource, isJobContainer: false) { ContainerNetworkAlias = networkAlias });
             }
 
             // Proxy variables

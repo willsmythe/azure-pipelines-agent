@@ -38,6 +38,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Tools)] = "C:\\__t"; // Tool cache folder may come from ENV, so we need a unique folder to avoid collision
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Work)] = "C:\\__w";
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Root)] = "C:\\__a";
+            // add -v '\\.\pipe\docker_engine:\\.\pipe\docker_engine' when they are available (17.09)
 #else
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Tools)] = "/__t"; // Tool cache folder may come from ENV, so we need a unique folder to avoid collision
             _pathMappings[hostContext.GetDirectory(WellKnownDirectory.Work)] = "/__w";

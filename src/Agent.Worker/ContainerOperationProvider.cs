@@ -17,11 +17,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
     [ServiceLocator(Default = typeof(ContainerOperationProvider))]
     public interface IContainerOperationProvider : IAgentService
     {
-        Task StopContainerAsync(IExecutionContext executionContext, object data);
-        Task CreateContainerNetworkAsync(IExecutionContext executionContext, object data);
-        Task RemoveContainerNetworkAsync(IExecutionContext executionContext, object data);
-        Task StartMultipleContainersAsync(IExecutionContext executionContext, object data);
-        Task StopMultipleContainersAsync(IExecutionContext executionContext, object data);
+        Task StartContainersAsync(IExecutionContext executionContext, object data);
+        Task StopContainersAsync(IExecutionContext executionContext, object data);
     }
 
     public class ContainerOperationProvider : AgentService, IContainerOperationProvider
@@ -35,20 +32,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             _dockerManger = HostContext.GetService<IDockerCommandManager>();
         }
 
-        private async Task StartContainerAsync(IExecutionContext executionContext, object data)
+        public async Task StartContainersAsync(IExecutionContext executionContext, object data)
         {
             Trace.Entering();
             ArgUtil.NotNull(executionContext, nameof(executionContext));
-
-            ContainerInfo container = data as ContainerInfo;
-            ArgUtil.NotNull(container, nameof(container));
-            ArgUtil.NotNullOrEmpty(container.ContainerImage, nameof(container.ContainerImage));
-
-            Trace.Info($"Container name: {container.ContainerName}");
-            Trace.Info($"Container image: {container.ContainerImage}");
-            Trace.Info($"Container registry: {container.ContainerRegistryEndpoint.ToString()}");
-            Trace.Info($"Container options: {container.ContainerCreateOptions}");
-            Trace.Info($"Skip container image pull: {container.SkipContainerImagePull}");
+            List<ContainerInfo> containers = data as List<ContainerInfo>;
+            ArgUtil.NotNull(containers, nameof(containers));
 
             // Check whether we are inside a container.
             // Our container feature requires to map working directory from host to the container.
@@ -108,6 +97,82 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             {
                 throw new NotSupportedException(StringUtil.Loc("MinRequiredDockerClientVersion", requiredDockerVersion, _dockerManger.DockerPath, dockerVersion.ClientVersion));
             }
+
+            executionContext.Debug($"Delete stale container networks from previous jobs");
+            int networkPruneExitCode = await _dockerManger.DockerNetworkPrune(executionContext);
+            if (networkPruneExitCode != 0)
+            {
+                executionContext.Warning($"Delete stale container networks failed, docker network prune fail with exit code {networkPruneExitCode}");
+            }
+
+            // Create local docker network for this job to avoid port conflict when multiple agents run on same machine.
+            // All containers within a job join the same network
+            var existingNetwork = executionContext.Variables.Get(Constants.Variables.Agent.ContainerNetwork);
+            if (string.IsNullOrEmpty(existingNetwork))
+            {
+                var newNetwork = $"vsts_network_{Guid.NewGuid().ToString("N")}";
+                await CreateContainerNetworkAsync(executionContext, newNetwork);
+                containers.ForEach(container => container.ContainerNetwork = newNetwork);
+            }
+            else
+            {
+                containers.ForEach(container => container.ContainerNetwork = existingNetwork);
+            }
+
+            // Clean up containers left by previous runs
+            executionContext.Debug($"Delete stale containers from previous jobs");
+            var staleContainers = await _dockerManger.DockerPS(executionContext, $"--all --quiet --no-trunc --filter \"label={_dockerManger.DockerInstanceLabel}\"");
+            foreach (var staleContainer in staleContainers)
+            {
+                int containerRemoveExitCode = await _dockerManger.DockerRemove(executionContext, staleContainer);
+                if (containerRemoveExitCode != 0)
+                {
+                    executionContext.Warning($"Delete stale containers failed, docker rm fail with exit code {containerRemoveExitCode} for container {staleContainer}");
+                }
+            }
+
+            foreach (var container in containers)
+            {
+                await StartContainerAsync(executionContext, container);
+            }
+        }
+
+        public async Task StopContainersAsync(IExecutionContext executionContext, object data)
+        {
+            Trace.Entering();
+            ArgUtil.NotNull(executionContext, nameof(executionContext));
+
+            List<ContainerInfo> containers = data as List<ContainerInfo>;
+            ArgUtil.NotNull(containers, nameof(containers));
+
+            var uniqueNetworks = new HashSet<string>();
+            foreach (var container in containers)
+            {
+                await StopContainerAsync(executionContext, container);
+                if (!uniqueNetworks.Contains(container.ContainerNetwork) && !String.IsNullOrEmpty(container.ContainerNetwork))
+                {
+                    uniqueNetworks.Add(container.ContainerNetwork);
+                }
+            }
+            // Remove any unique network created for the job. There will usually be only one
+            foreach (var networkId in uniqueNetworks)
+            {
+                await RemoveContainerNetworkAsync(executionContext, networkId);
+            }
+        }
+
+        private async Task StartContainerAsync(IExecutionContext executionContext, ContainerInfo container)
+        {
+            Trace.Entering();
+            ArgUtil.NotNull(executionContext, nameof(executionContext));
+            ArgUtil.NotNull(container, nameof(container));
+            ArgUtil.NotNullOrEmpty(container.ContainerImage, nameof(container.ContainerImage));
+
+            Trace.Info($"Container name: {container.ContainerName}");
+            Trace.Info($"Container image: {container.ContainerImage}");
+            Trace.Info($"Container registry: {container.ContainerRegistryEndpoint.ToString()}");
+            Trace.Info($"Container options: {container.ContainerCreateOptions}");
+            Trace.Info($"Skip container image pull: {container.SkipContainerImagePull}");
 
             // Login to private docker registry
             string registryServer = string.Empty;
@@ -203,23 +268,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 container.MountVolumes.Add(new MountVolume(taskKeyFile, container.TranslateToContainerPath(taskKeyFile)));
 #endif
 
-#if !OS_WINDOWS
-                if (string.IsNullOrEmpty(container.ContainerNetwork)) // create network when Windows support it.
-                {
-                    // Create local docker network for this job to avoid port conflict when multiple agents run on same machine.
-                    // All containers within a job join the same network
-                    var existingNetwork = executionContext.Variables.Get(Constants.Variables.Agent.ContainerNetwork);
-                    if (string.IsNullOrEmpty(existingNetwork))
-                    {
-                        container.ContainerNetwork = $"vsts_network_{Guid.NewGuid().ToString("N")}";
-                        await CreateContainerNetworkAsync(executionContext, container.ContainerNetwork);
-                    }
-                    else
-                    {
-                        container.ContainerNetwork = existingNetwork;
-                    }
-                }
-#endif
                 if (container.IsJobContainer)
                 {
                     // See if this container brings its own Node.js
@@ -388,22 +436,18 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 #endif
         }
 
-        public async Task StopContainerAsync(IExecutionContext executionContext, object data)
+        private async Task StopContainerAsync(IExecutionContext executionContext, ContainerInfo container)
         {
             Trace.Entering();
             ArgUtil.NotNull(executionContext, nameof(executionContext));
-            ContainerInfo container = data as ContainerInfo;
             ArgUtil.NotNull(container, nameof(container));
 
-            if (!string.IsNullOrEmpty(container.ContainerId))
-            {
-                executionContext.Output($"Stop and remove container: {container.ContainerDisplayName}");
+            executionContext.Output($"Stop and remove container: {container.ContainerDisplayName}");
 
-                int rmExitCode = await _dockerManger.DockerRemove(executionContext, container.ContainerId);
-                if (rmExitCode != 0)
-                {
-                    executionContext.Error($"Docker rm fail with exit code {rmExitCode}");
-                }
+            int rmExitCode = await _dockerManger.DockerRemove(executionContext, container.ContainerId);
+            if (rmExitCode != 0)
+            {
+                executionContext.Warning($"Docker rm fail with exit code {rmExitCode}");
             }
         }
 
@@ -455,100 +499,34 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
         }
 #endif
 
-        public async Task CreateContainerNetworkAsync(IExecutionContext executionContext, object data)
+        private async Task CreateContainerNetworkAsync(IExecutionContext executionContext, string network)
         {
             Trace.Entering();
             ArgUtil.NotNull(executionContext, nameof(executionContext));
-            string containerNetwork = data as string;
-            int networkExitCode = await _dockerManger.DockerNetworkCreate(executionContext, containerNetwork);
+            int networkExitCode = await _dockerManger.DockerNetworkCreate(executionContext, network);
             if (networkExitCode != 0)
             {
                 throw new InvalidOperationException($"Docker network create failed with exit code {networkExitCode}");
             }
-
             // Expose docker network to env
-            executionContext.Variables.Set(Constants.Variables.Agent.ContainerNetwork, containerNetwork);
+            executionContext.Variables.Set(Constants.Variables.Agent.ContainerNetwork, network);
         }
 
-        public async Task RemoveContainerNetworkAsync(IExecutionContext executionContext, object data)
+        private async Task RemoveContainerNetworkAsync(IExecutionContext executionContext, string network)
         {
             Trace.Entering();
             ArgUtil.NotNull(executionContext, nameof(executionContext));
-            string containerNetwork = data as string;
-            if (string.IsNullOrEmpty(containerNetwork))
+            ArgUtil.NotNull(network, nameof(network));
+
+            executionContext.Output($"Remove container network: {network}");
+
+            int removeExitCode = await _dockerManger.DockerNetworkRemove(executionContext, network);
+            if (removeExitCode != 0)
             {
-                containerNetwork = executionContext.Variables.Get(Constants.Variables.Agent.ContainerNetwork);
+                executionContext.Warning($"Docker network rm failed with exit code {removeExitCode}");
             }
-            if (!string.IsNullOrEmpty(containerNetwork))
-            {
-                executionContext.Output($"Remove container network: {containerNetwork}");
-
-                int removeExitCode = await _dockerManger.DockerNetworkRemove(executionContext, containerNetwork);
-                if (removeExitCode != 0)
-                {
-                    executionContext.Error($"Docker network rm failed with exit code {removeExitCode}");
-                }
-                // Remove docker network from env
-                executionContext.Variables.Set(Constants.Variables.Agent.ContainerNetwork, null);
-            }
-        }
-
-        public async Task StartMultipleContainersAsync(IExecutionContext executionContext, object data)
-        {
-            Trace.Entering();
-            ArgUtil.NotNull(executionContext, nameof(executionContext));
-
-#if !OS_WINDOWS
-            executionContext.Debug($"Delete stale container networks from previous jobs");
-            int networkPruneExitCode = await _dockerManger.DockerNetworkPrune(executionContext);
-            if (networkPruneExitCode != 0)
-            {
-                executionContext.Warning($"Delete stale container networks failed, docker network prune fail with exit code {networkPruneExitCode}");
-            }
-#endif
-            // Clean up containers left by previous runs
-            executionContext.Debug($"Delete stale containers from previous jobs");
-            var staleContainers = await _dockerManger.DockerPS(executionContext, $"--all --quiet --no-trunc --filter \"label={_dockerManger.DockerInstanceLabel}\"");
-            foreach (var staleContainer in staleContainers)
-            {
-                int containerRemoveExitCode = await _dockerManger.DockerRemove(executionContext, staleContainer);
-                if (containerRemoveExitCode != 0)
-                {
-                    executionContext.Warning($"Delete stale containers failed, docker rm fail with exit code {containerRemoveExitCode} for container {staleContainer}");
-                }
-            }
-
-            List<ContainerInfo> containers = data as List<ContainerInfo>;
-            ArgUtil.NotNull(containers, nameof(containers));
-
-            foreach (var container in containers)
-            {
-                await StartContainerAsync(executionContext, container);
-            }
-        }
-
-        public async Task StopMultipleContainersAsync(IExecutionContext executionContext, object data)
-        {
-            Trace.Entering();
-            ArgUtil.NotNull(executionContext, nameof(executionContext));
-
-            List<ContainerInfo> containers = data as List<ContainerInfo>;
-            ArgUtil.NotNull(containers, nameof(containers));
-
-            var uniqueNetworks = new HashSet<string>();
-            foreach (var container in containers)
-            {
-                await StopContainerAsync(executionContext, container);
-                if (!uniqueNetworks.Contains(container.ContainerNetwork) && container.ContainerNetwork != null)
-                {
-                    uniqueNetworks.Add(container.ContainerNetwork);
-                }
-            }
-            // Remove any unique network created for the job. There will usually be only one
-            foreach (var networkId in uniqueNetworks)
-            {
-                await RemoveContainerNetworkAsync(executionContext, networkId);
-            }
+            // Remove docker network from env
+            executionContext.Variables.Set(Constants.Variables.Agent.ContainerNetwork, null);
         }
     }
 }

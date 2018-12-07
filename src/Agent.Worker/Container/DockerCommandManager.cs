@@ -122,16 +122,16 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                 {
                     portArg = $"-p {port.HostPort}:{port.ContainerPort}";
                 }
-                else if (string.IsNullOrEmpty(port.HostPort) && !string.IsNullOrEmpty(port.ContainerPort))
+                else if (!string.IsNullOrEmpty(port.ContainerPort))
                 {
                     portArg = $"-p {port.ContainerPort}";
                 }
-                if (!string.IsNullOrEmpty(port.Protocol))
-                {
-                    portArg += $"/{port.Protocol}";
-                }
                 if (!string.IsNullOrEmpty(portArg))
                 {
+                    if (!string.IsNullOrEmpty(port.Protocol))
+                    {
+                        portArg += $"/{port.Protocol}";
+                    }
                     dockerOptions.Add(portArg);
                 }
             }
@@ -271,29 +271,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
 
         public async Task<List<PortMapping>> DockerPort(IExecutionContext context, string containerId)
         {
-            const string targetPort = "targetPort";
-            const string proto = "proto";
-            const string host = "host";
-            const string hostPort = "hostPort";
-
-            //"TARGET_PORT/PROTO -> HOST:HOST_PORT"
-            string pattern = $"^(?<{targetPort}>\\d+)/(?<{proto}>\\w+) -> (?<{host}>.+):(?<{hostPort}>\\d+)$";
-
             List<string> portMappingLines = await ExecuteDockerCommandAsync(context, "port", containerId);
-            List<PortMapping> portMappings = new List<PortMapping>();
-            foreach(var line in portMappingLines)
-            {
-                Match m = Regex.Match(line, pattern, RegexOptions.None, TimeSpan.FromSeconds(1));
-                if (m.Success)
-                {
-                    portMappings.Add(new PortMapping(
-                        m.Groups[hostPort].Value,
-                        m.Groups[targetPort].Value,
-                        m.Groups[proto].Value
-                    ));
-                }
-            }
-            return portMappings;
+            return DockerUtil.ParseDockerPort(portMappingLines);
         }
 
         private Task<int> ExecuteDockerCommandAsync(IExecutionContext context, string command, string options, CancellationToken cancellationToken = default(CancellationToken))
