@@ -327,6 +327,30 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 }
             }
 
+            try
+            {
+                // Make sure container is up and running
+                var psOutputs = await _dockerManger.DockerPS(executionContext, $"--all --filter id={container.ContainerId} --filter status=running --no-trunc --format \"{{{{.ID}}}} {{{{.Status}}}}\"");
+                if (psOutputs.FirstOrDefault(x => !string.IsNullOrEmpty(x))?.StartsWith(container.ContainerId) != true)
+                {
+                    // container is not up and running, pull docker log for this container.
+                    await _dockerManger.DockerPS(executionContext, $"--all --filter id={container.ContainerId} --no-trunc --format \"{{{{.ID}}}} {{{{.Status}}}}\"");
+                    int logsExitCode = await _dockerManger.DockerLogs(executionContext, container.ContainerId);
+                    if (logsExitCode != 0)
+                    {
+                        executionContext.Warning($"Docker logs fail with exit code {logsExitCode}");
+                    }
+
+                    executionContext.Warning($"Docker container {container.ContainerId} is not in running state.");
+                }
+            }
+            catch (Exception ex)
+            {
+                // pull container log is best effort.
+                Trace.Error("Catch exception when check container log and container status.");
+                Trace.Error(ex);
+            }
+
 #if !OS_WINDOWS
             if (container.IsJobContainer)
             {
@@ -334,30 +358,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 int execWhichBashExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"which bash");
                 if (execWhichBashExitCode != 0)
                 {
-                    try
-                    {
-                        // Make sure container is up and running
-                        var psOutputs = await _dockerManger.DockerPS(executionContext, $"--all --filter id={container.ContainerId} --filter status=running --no-trunc --format \"{{{{.ID}}}} {{{{.Status}}}}\"");
-                        if (psOutputs.FirstOrDefault(x => !string.IsNullOrEmpty(x))?.StartsWith(container.ContainerId) != true)
-                        {
-                            // container is not up and running, pull docker log for this container.
-                            await _dockerManger.DockerPS(executionContext, $"--all --filter id={container.ContainerId} --no-trunc --format \"{{{{.ID}}}} {{{{.Status}}}}\"");
-                            int logsExitCode = await _dockerManger.DockerLogs(executionContext, container.ContainerId);
-                            if (logsExitCode != 0)
-                            {
-                                executionContext.Warning($"Docker logs fail with exit code {logsExitCode}");
-                            }
-
-                            executionContext.Warning($"Docker container {container.ContainerId} is not in running state.");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // pull container log is best effort.
-                        Trace.Error("Catch exception when check container log and container status.");
-                        Trace.Error(ex);
-                    }
-
                     throw new InvalidOperationException($"Docker exec fail with exit code {execWhichBashExitCode}");
                 }
 
