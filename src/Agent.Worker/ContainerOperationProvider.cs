@@ -138,15 +138,17 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 
             foreach (var container in containers.FindAll(c => !c.IsJobContainer))
             {
-                // Check health of sidecar containers
-                executionContext.Output($"Waiting for {container.ContainerNetworkAlias} service to become healthy.");
-                string healthCheck = @"--format='{{.State.Health.Status}}'";
-                string serviceHealth = (await _dockerManger.DockerInspect(context: executionContext, dockerObject: container.ContainerId, options: healthCheck)).Trim();
-                if (string.IsNullOrEmpty(serviceHealth))
+                string containerHasHealthcheck = @"--format='{{.Config.Healthcheck}}'";
+                string hasHealthcheck = (await _dockerManger.DockerInspect(executionContext, container.ContainerId, containerHasHealthcheck));
+                if (string.Equals(hasHealthcheck, "<nil>", StringComparison.OrdinalIgnoreCase))
                 {
                     // Container has no HEALTHCHECK
                     continue;
                 }
+                // Check health of sidecar containers
+                executionContext.Output($"Waiting for {container.ContainerNetworkAlias} service to become healthy.");
+                string healthCheck = @"--format='{{.State.Health.Status}}'";
+                string serviceHealth = (await _dockerManger.DockerInspect(context: executionContext, dockerObject: container.ContainerId, options: healthCheck)).Trim();
                 TimeSpan backoff = TimeSpan.FromSeconds(2);
                 while (string.Equals(serviceHealth, "starting", StringComparison.OrdinalIgnoreCase))
                 {
