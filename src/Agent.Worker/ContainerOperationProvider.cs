@@ -135,6 +135,35 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             {
                 await StartContainerAsync(executionContext, container);
             }
+
+            foreach (var container in containers.FindAll(c => !c.IsJobContainer))
+            {
+                // Check health of sidecar containers
+                executionContext.Output($"Waiting for {container.ContainerNetworkAlias} service to become healthy.");
+                string healthCheck = @"--format='{{.State.Health.Status}}'";
+                string serviceHealth = (await _dockerManger.DockerInspect(context: executionContext, dockerObject: container.ContainerId, options: healthCheck)).Trim();
+                if (string.IsNullOrEmpty(serviceHealth))
+                {
+                    // Container has no HEALTHCHECK
+                    continue;
+                }
+                TimeSpan backoff = TimeSpan.FromSeconds(2);
+                while (string.Equals(serviceHealth, "starting", StringComparison.OrdinalIgnoreCase))
+                {
+                    executionContext.Output($"{container.ContainerNetworkAlias} service is starting, waiting {backoff.Seconds} before checking again.");
+                    Thread.Sleep(backoff);
+                    backoff.Multiply(2);
+                    serviceHealth = (await _dockerManger.DockerInspect(context: executionContext, dockerObject: container.ContainerId, options: healthCheck)).Trim();
+                }
+                if (string.Equals(serviceHealth, "unhealthy", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException($"Failed to initialize, {container.ContainerNetworkAlias} service is unhealthy");
+                }
+                else if (string.Equals(serviceHealth, "healthy", StringComparison.OrdinalIgnoreCase))
+                {
+                    executionContext.Output($"{container.ContainerNetworkAlias} service is healthy.");
+                }
+            }
         }
 
         public async Task StopContainersAsync(IExecutionContext executionContext, object data)
