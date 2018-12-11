@@ -3,16 +3,16 @@
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Agent.Plugins.TestResultParser.Client;
+using Agent.Plugins.Log.TestResultParser.Contracts;
 using Microsoft.TeamFoundation.TestManagement.WebApi;
 using Microsoft.VisualStudio.Services.WebApi;
-using TestRun = Agent.Plugins.TestResultParser.TestResult.TestRun;
+using TestRun = Agent.Plugins.Log.TestResultParser.Contracts.TestRun;
 
-namespace Agent.Plugins.TestResultParser.Publish
+namespace Agent.Plugins.TestResultParser.Plugin
 {
     public class PipelineTestRunPublisher : ITestRunPublisher
     {
-        public PipelineTestRunPublisher(ClientFactory clientFactory, PipelineConfig pipelineConfig)
+        public PipelineTestRunPublisher(IClientFactory clientFactory, IPipelineConfig pipelineConfig)
         {
             _pipelineConfig = pipelineConfig;
             _httpClient = clientFactory.GetClient<TestManagementHttpClient>();
@@ -34,7 +34,7 @@ namespace Agent.Plugins.TestResultParser.Publish
                     DurationInMs = passedTest.ExecutionTime.TotalMilliseconds,
                     State = "Completed",
                     AutomatedTestType = "LogParser",
-                    Outcome = TestOutcome.Passed.ToString()
+                    Outcome = Microsoft.TeamFoundation.TestManagement.WebApi.TestOutcome.Passed.ToString()
 
                 });
             }
@@ -48,7 +48,7 @@ namespace Agent.Plugins.TestResultParser.Publish
                     DurationInMs = passedTest.ExecutionTime.TotalMilliseconds,
                     State = "Completed",
                     AutomatedTestType = "LogParser",
-                    Outcome = TestOutcome.Failed.ToString()
+                    Outcome = Microsoft.TeamFoundation.TestManagement.WebApi.TestOutcome.Failed.ToString()
                 });
             }
 
@@ -61,7 +61,7 @@ namespace Agent.Plugins.TestResultParser.Publish
                     DurationInMs = passedTest.ExecutionTime.TotalMilliseconds,
                     State = "Completed",
                     AutomatedTestType = "LogParser",
-                    Outcome = TestOutcome.NotExecuted.ToString()
+                    Outcome = Microsoft.TeamFoundation.TestManagement.WebApi.TestOutcome.NotExecuted.ToString()
 
                 });
             }
@@ -72,6 +72,6 @@ namespace Agent.Plugins.TestResultParser.Publish
         }
 
         private readonly TestManagementHttpClient _httpClient;
-        private readonly PipelineConfig _pipelineConfig;
+        private readonly IPipelineConfig _pipelineConfig;
     }
 }

@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
-using Agent.Plugins.TestResultParser.Gateway;
-using Agent.Plugins.TestResultParser.Parser;
+using Agent.Plugins.Log.TestResultParser.Contracts;
 
-namespace Agent.Plugins.TestResultParser.Bus
+namespace Agent.Plugins.TestResultParser.Plugin
 {
     public static class LogParserGatewayExtensions
     {

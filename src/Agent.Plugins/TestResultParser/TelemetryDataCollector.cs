@@ -3,11 +3,11 @@
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Agent.Plugins.TestResultParser.Client;
+using Agent.Plugins.Log.TestResultParser.Contracts;
 using Microsoft.VisualStudio.Services.CustomerIntelligence.WebApi;
 using Microsoft.VisualStudio.Services.WebPlatform;
 
-namespace Agent.Plugins.TestResultParser.Telemetry
+namespace Agent.Plugins.TestResultParser.Plugin
 {
     public class TelemetryDataCollector : ITelemetryDataCollector
     {

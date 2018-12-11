@@ -20,11 +20,8 @@ namespace Agent.Sdk
     {
         string FriendlyName { get; }
 
-<<<<<<< HEAD
-=======
         Task<bool> InitializeAsync(IAgentLogPluginContext context);
 
->>>>>>> f3f22d3a2bda22979747ce04f9ddd0dd9afeefaf
         Task ProcessLineAsync(IAgentLogPluginContext context, Pipelines.TaskStepDefinitionReference step, string line);
 
         Task FinalizeAsync(IAgentLogPluginContext context);

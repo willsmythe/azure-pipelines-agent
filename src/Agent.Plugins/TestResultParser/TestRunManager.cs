@@ -1,42 +1,44 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Agent.Plugins.TestResultParser.Loggers;
-using Agent.Plugins.TestResultParser.Publish;
-using Agent.Plugins.TestResultParser.TestResult;
+using System.Threading.Tasks;
+using Agent.Plugins.Log.TestResultParser.Contracts;
 
-namespace Agent.Plugins.TestResultParser.TestRunManger
+namespace Agent.Plugins.Log.TestResultParser.Plugin
 {
 
     /// <inheritdoc/>
     public class TestRunManager : ITestRunManager
     {
         private readonly ITestRunPublisher _publisher;
+        private readonly ITraceLogger _logger;
 
         /// <summary>
         /// Construct the TestRunManger
         /// </summary>
-        /// <param name="testRunPublisher"></param>
-        public TestRunManager(ITestRunPublisher testRunPublisher)
+        public TestRunManager(ITestRunPublisher testRunPublisher, ITraceLogger logger)
         {
             _publisher = testRunPublisher;
+            _logger = logger;
         }
 
         /// <inheritdoc/>
-        public void Publish(TestRun testRun)
+        public Task PublishAsync(TestRun testRun)
         {
             var validatedTestRun = this.ValidateAndPrepareForPublish(testRun);
             if (validatedTestRun != null)
             {
-                _publisher.PublishAsync(validatedTestRun); //TODO fix this
+                return _publisher.PublishAsync(validatedTestRun); //TODO fix this
             }
+
+            return Task.CompletedTask;
         }
 
         private TestRun ValidateAndPrepareForPublish(TestRun testRun)
         {
             if (testRun?.TestRunSummary == null)
             {
-                TraceLogger.Error("TestRunManger.ValidateAndPrepareForPublish : TestRun or TestRunSummary is null.");
+                _logger.Error("TestRunManger.ValidateAndPrepareForPublish : TestRun or TestRunSummary is null.");
                 return null;
             }
 
@@ -49,14 +51,14 @@ namespace Agent.Plugins.TestResultParser.TestRunManger
             // Match the passed test count and clear the passed tests collection if mismatch occurs
             if (testRun.TestRunSummary.TotalPassed != testRun.PassedTests?.Count)
             {
-                TraceLogger.Warning("TestRunManger.ValidateAndPrepareForPublish : Passed test count does not match the Test summary.");
+                _logger.Warning("TestRunManger.ValidateAndPrepareForPublish : Passed test count does not match the Test summary.");
                 testRun.PassedTests = null;
             }
 
             // Match the failed test count and clear the failed tests collection if mismatch occurs
             if (testRun.TestRunSummary.TotalFailed != testRun.FailedTests?.Count)
             {
-                TraceLogger.Warning("TestRunManger.ValidateAndPrepareForPublish : Failed test count does not match the Test summary.");
+                _logger.Warning("TestRunManger.ValidateAndPrepareForPublish : Failed test count does not match the Test summary.");
                 testRun.FailedTests = null;
             }
 

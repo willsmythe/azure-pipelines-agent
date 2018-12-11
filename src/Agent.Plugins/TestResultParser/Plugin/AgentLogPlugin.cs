@@ -1,8 +1,9 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
-using Agent.Plugins.TestResultParser;
-using Agent.Plugins.TestResultParser.Client;
-using Agent.Plugins.TestResultParser.Gateway;
+using Agent.Plugins.Log.TestResultParser.Contracts;
+using Agent.Plugins.Log.TestResultParser.Plugin;
+using Agent.Plugins.TestResultParser.Plugin;
 using Agent.Sdk;
 using Pipelines = Microsoft.TeamFoundation.DistributedTask.Pipelines;
 
@@ -12,15 +13,36 @@ namespace Agent.Plugins.Log
     {
         public string FriendlyName => "Test Result Log Parser";
 
-        public void Initialize(IAgentLogPluginContext context)
+        public Task<bool> InitializeAsync(IAgentLogPluginContext context)
         {
-            CheckForPluginDisable(context); // throw an exception and if initialization fails, disable plugin?
-            PopulatePipelineConfig(context);
+            return new Task<bool>(() =>
+            {
+                try
+                {
+                    if (CheckForPluginDisable(context))
+                    {
+                        return false; // disable the plugin
+                    }
 
-            _clientFactory = new ClientFactory(context.VssConnection);
-            _inputDataParser = new LogParserGateway();
 
-            _inputDataParser.Initialize(_clientFactory, pipelineConfig: _pipelineConfig);
+                    PopulatePipelineConfig(context);
+
+                    _clientFactory = new ClientFactory(context.VssConnection);
+                    _inputDataParser = new LogParserGateway();
+                    _logger = new TraceLogger(context);
+
+                    _inputDataParser.Initialize(_clientFactory, _pipelineConfig, _logger);
+                }
+                catch (Exception ex)
+                {
+
+                    _logger.Warning($"Unable to initialize {FriendlyName}");
+                    context.Trace(ex.StackTrace);
+                    return false;
+                }
+
+                return true;
+            });
         }
 
         public Task ProcessLineAsync(IAgentLogPluginContext context, Pipelines.TaskStepDefinitionReference step, string line)
@@ -30,12 +52,15 @@ namespace Agent.Plugins.Log
 
         public Task FinalizeAsync(IAgentLogPluginContext context)
         {
-            _inputDataParser.Complete();
-            return Task.CompletedTask;
+            return new Task(() =>
+            {
+                _inputDataParser.Complete();
+            });
         }
 
-        private void CheckForPluginDisable(IAgentLogPluginContext context)
+        private bool CheckForPluginDisable(IAgentLogPluginContext context)
         {
+            return context.Steps == null || context.Steps.Any(x => x.Id.Equals(new Guid("0B0F01ED-7DDE-43FF-9CBB-E48954DAF9B1")));
             // check for PTR task or some other tasks to enable/disable
         }
 
@@ -52,8 +77,9 @@ namespace Agent.Plugins.Log
             }
         }
 
-        private LogParserGateway _inputDataParser;
-        private ClientFactory _clientFactory;
-        private readonly PipelineConfig _pipelineConfig = new PipelineConfig();
+        private ILogParserGateway _inputDataParser;
+        private IClientFactory _clientFactory;
+        private ITraceLogger _logger;
+        private readonly IPipelineConfig _pipelineConfig = new PipelineConfig();
     }
 }

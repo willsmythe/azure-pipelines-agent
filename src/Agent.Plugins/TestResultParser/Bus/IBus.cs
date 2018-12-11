@@ -1,8 +1,8 @@
 ﻿using System;
 
-namespace Agent.Plugins.TestResultParser.Bus
+namespace Agent.Plugins.TestResultParser.Plugin
 {
-    interface IBus<TMessage>
+    public interface IBus<out TMessage>
     {
         /* Subscribe to Message Bus to receive messages via Pub-Sub model */
         Guid Subscribe(Action<TMessage> handlerAction);

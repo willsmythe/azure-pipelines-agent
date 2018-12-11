@@ -3,30 +3,25 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-using Agent.Plugins.TestResultParser.Bus;
-using Agent.Plugins.TestResultParser.Client;
-using Agent.Plugins.TestResultParser.Loggers;
-using Agent.Plugins.TestResultParser.Parser;
-using Agent.Plugins.TestResultParser.Publish;
-using Agent.Plugins.TestResultParser.Telemetry;
-using Agent.Plugins.TestResultParser.TestRunManger;
+using Agent.Plugins.Log.TestResultParser.Contracts;
+using Agent.Plugins.Log.TestResultParser.Plugin;
 
-namespace Agent.Plugins.TestResultParser.Gateway
+namespace Agent.Plugins.TestResultParser.Plugin
 {
+
     public class LogParserGateway : ILogParserGateway, IBus<LogData>
     {
-        public void Initialize(ClientFactory clientFactory, PipelineConfig pipelineConfig)
+        public void Initialize(IClientFactory clientFactory, IPipelineConfig pipelineConfig, ITraceLogger traceLogger)
         {
-            var testRunManager = new TestRunManager(new PipelineTestRunPublisher(clientFactory, pipelineConfig));
+            _logger = traceLogger;
+            var publisher = new PipelineTestRunPublisher(clientFactory, pipelineConfig);
             var telemetry = new TelemetryDataCollector(clientFactory);
-            var logger = TraceLogger.Instance;
+            var testRunManager = new TestRunManager(publisher, _logger);
+            var parsers = ParserFactory.GetTestResultParsers(testRunManager, traceLogger, telemetry);
 
-            var parsers = ParserFactory.GetTestResultParsers(testRunManager);
             foreach (var parser in parsers)
             {
-                parser.SetTelemetryCollector(telemetry);
-                parser.SetTraceLogger(logger);
-
+                //Subscribe parsers to Pub-Sub model
                 Subscribe(parser.Parse);
             }
         }
@@ -49,9 +44,9 @@ namespace Agent.Plugins.TestResultParser.Gateway
                 _broadcast.Complete();
                 Task.WaitAll(_subscribers.Values.Select(x => x.Completion).ToArray());
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Log it and proceed
+                _logger?.Warning($"Failed to finish the complete operation: {ex.StackTrace}");
             }
         }
 
@@ -83,5 +78,6 @@ namespace Agent.Plugins.TestResultParser.Gateway
         private readonly BroadcastBlock<LogData> _broadcast = new BroadcastBlock<LogData>(message => message);
         private readonly ConcurrentDictionary<Guid, ITargetBlock<LogData>> _subscribers = new ConcurrentDictionary<Guid, ITargetBlock<LogData>>();
         private int _counter;
+        private ITraceLogger _logger;
     }
 }

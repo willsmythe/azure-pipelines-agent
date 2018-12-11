@@ -227,7 +227,10 @@ if [[ "$CURRENT_PLATFORM" == 'windows' ]]; then
     msbuild_location="$vs_location""\MSBuild\15.0\Bin\msbuild.exe"
 
     if [[ ! -e "${msbuild_location}" ]]; then
-        failed "Can not find msbuild location, failing build"
+        msbuild_location="$vs_location""\MSBuild\Current\Bin\msbuild.exe" ## Fix for VS 2019 and going forward
+        if [[ ! -e "${msbuild_location}" ]]; then
+            failed "Can not find msbuild location, failing build"
+        fi
     fi
 
     export DesktopMSBuild="$msbuild_location"
