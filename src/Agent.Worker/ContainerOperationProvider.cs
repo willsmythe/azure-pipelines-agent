@@ -138,24 +138,22 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
 
             foreach (var container in containers.FindAll(c => !c.IsJobContainer))
             {
-                string containerHasHealthcheck = @"--format='{{.Config.Healthcheck}}'";
-                string hasHealthcheck = (await _dockerManger.DockerInspect(executionContext, container.ContainerId, containerHasHealthcheck));
-                if (string.Equals(hasHealthcheck, "<nil>", StringComparison.OrdinalIgnoreCase))
+                // Check health of sidecar containers
+                string healthCheck = "--format=\"{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}\"";
+                string serviceHealth = await _dockerManger.DockerInspect(context: executionContext, dockerObject: container.ContainerId, options: healthCheck);
+                if (string.IsNullOrEmpty(serviceHealth))
                 {
                     // Container has no HEALTHCHECK
                     continue;
                 }
-                // Check health of sidecar containers
                 executionContext.Output($"Waiting for {container.ContainerNetworkAlias} service to become healthy.");
-                string healthCheck = @"--format='{{.State.Health.Status}}'";
-                string serviceHealth = (await _dockerManger.DockerInspect(context: executionContext, dockerObject: container.ContainerId, options: healthCheck)).Trim();
                 TimeSpan backoff = TimeSpan.FromSeconds(2);
                 while (string.Equals(serviceHealth, "starting", StringComparison.OrdinalIgnoreCase))
                 {
                     executionContext.Output($"{container.ContainerNetworkAlias} service is starting, waiting {backoff.Seconds} before checking again.");
                     Thread.Sleep(backoff);
-                    backoff.Multiply(2);
-                    serviceHealth = (await _dockerManger.DockerInspect(context: executionContext, dockerObject: container.ContainerId, options: healthCheck)).Trim();
+                    backoff = backoff.Multiply(2);
+                    serviceHealth = await _dockerManger.DockerInspect(context: executionContext, dockerObject: container.ContainerId, options: healthCheck);
                 }
                 if (string.Equals(serviceHealth, "unhealthy", StringComparison.OrdinalIgnoreCase))
                 {
