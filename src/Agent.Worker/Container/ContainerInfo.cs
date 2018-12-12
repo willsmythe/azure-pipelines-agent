@@ -316,7 +316,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             else
             {
                 // target - or, default to passing straight through
-                ContainerPort = port;
+                ContainerPort = portString;
                 Protocol = protoString;
             }
         }
