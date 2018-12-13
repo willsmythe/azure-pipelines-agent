@@ -140,8 +140,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                             containers.Add(context.Container);
                         }
                         containers.AddRange(context.SidecarContainers);
-                        
-                        // TODO (@dakale): Localize strings
+
                         initResult.PreJobSteps.Add(new JobExtensionRunner(runAsync: containerProvider.StartContainersAsync,
                                                                           condition: ExpressionManager.Succeeded,
                                                                           displayName: StringUtil.Loc("InitializeContainer"),
