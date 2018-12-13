@@ -218,7 +218,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     }
                 }
 
-                // Expand sidecar container properties
+                // Expand container properties
+                jobContext.Container?.ExpandProperties(jobContext.Variables);
                 foreach (var sidecar in jobContext.SidecarContainers)
                 {
                     sidecar.ExpandProperties(jobContext.Variables);
