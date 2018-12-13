@@ -115,25 +115,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             {
                 dockerOptions.Add($"--network-alias {container.ContainerNetworkAlias}");
             }
-            foreach (var port in container.PortMappings)
+            foreach (var port in container.UserPortMappings)
             {
-                var portArg = string.Empty;
-                if (!string.IsNullOrEmpty(port.HostPort) && !string.IsNullOrEmpty(port.ContainerPort))
-                {
-                    portArg = $"-p {port.HostPort}:{port.ContainerPort}";
-                }
-                else if (!string.IsNullOrEmpty(port.ContainerPort))
-                {
-                    portArg = $"-p {port.ContainerPort}";
-                }
-                if (!string.IsNullOrEmpty(portArg))
-                {
-                    if (!string.IsNullOrEmpty(port.Protocol))
-                    {
-                        portArg += $"/{port.Protocol}";
-                    }
-                    dockerOptions.Add(portArg);
-                }
+                dockerOptions.Add($"-p {port}");
             }
             dockerOptions.Add($"{container.ContainerCreateOptions}");
             foreach (var env in container.ContainerEnvironmentVariables)

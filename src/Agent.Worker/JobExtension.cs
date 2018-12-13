@@ -144,11 +144,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                         // TODO (@dakale): Localize strings
                         initResult.PreJobSteps.Add(new JobExtensionRunner(runAsync: containerProvider.StartContainersAsync,
                                                                           condition: ExpressionManager.Succeeded,
-                                                                          displayName: containers.Count > 1 ? StringUtil.Loc("InitializeContainers") : StringUtil.Loc("InitializeContainer"),
+                                                                          displayName: StringUtil.Loc("InitializeContainer"),
                                                                           data: (object)containers));
                         postJobStepsBuilder.Push(new JobExtensionRunner(runAsync: containerProvider.StopContainersAsync,
                                                                         condition: ExpressionManager.Always,
-                                                                        displayName: containers.Count > 1 ? StringUtil.Loc("StopContainers") : StringUtil.Loc("StopContainer"),
+                                                                        displayName: StringUtil.Loc("StopContainer"),
                                                                         data: (object)containers));
                     }
 

@@ -8,7 +8,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
 {
     public class ContainerInfo
     {
+        private IDictionary<string, string> _userMountVolumes;
         private List<MountVolume> _mountVolumes;
+        private IDictionary<string, string> _userPortMappings;
         private List<PortMapping> _portMappings;
         private IDictionary<string, string> _environmentVariables;
 
@@ -52,14 +54,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             {
                 foreach (var port in container.Ports)
                 {
-                    PortMappings.Add(new PortMapping(port, isExpanded: false));
+                    UserPortMappings.Add(port, port);
                 }
             }
             if (container.Volumes?.Count > 0)
             {
                 foreach (var volume in container.Volumes)
                 {
-                    MountVolumes.Add(new MountVolume(volume, isExpanded: false));
+                    UserMountVolumes.Add(volume, volume);
                 }
             }
         }
@@ -98,6 +100,18 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             }
         }
 
+        public IDictionary<string, string> UserMountVolumes
+        {
+            get
+            {
+                if (_userMountVolumes == null)
+                {
+                    _userMountVolumes = new Dictionary<string, string>();
+                }
+                return _userMountVolumes;
+            }
+        }
+
         public List<MountVolume> MountVolumes
         {
             get
@@ -109,9 +123,18 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
 
                 return _mountVolumes;
             }
-            set
+        }
+
+        public IDictionary<string, string> UserPortMappings
+        {
+            get
             {
-                _mountVolumes = value;
+                if (_userPortMappings == null)
+                {
+                    _userPortMappings = new Dictionary<string, string>();
+                }
+
+                return _userPortMappings;
             }
         }
 
@@ -125,10 +148,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
                 }
 
                 return _portMappings;
-            }
-            set
-            {
-                _portMappings = value;
             }
         }
 
@@ -199,6 +218,28 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
 
             return path;
         }
+
+        public void AddPortMappings(List<PortMapping> portMappings)
+        {
+            foreach (var port in portMappings)
+            {
+                PortMappings.Add(port);
+            }
+        }
+
+        public void ExpandProperties(Variables variables)
+        {
+            // Expand port mapping
+            variables.ExpandValues(UserPortMappings);
+
+            // Expand volume mounts
+            variables.ExpandValues(UserMountVolumes);
+            foreach (var volume in UserMountVolumes.Values)
+            {
+                // After mount volume variables are expanded, they are final
+                MountVolumes.Add(new MountVolume(volume));
+            }
+        }
     }
 
     public class MountVolume
@@ -208,20 +249,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             this.SourceVolumePath = sourceVolumePath;
             this.TargetVolumePath = targetVolumePath;
             this.ReadOnly = readOnly;
-            this.IsExpanded = true;
         }
 
-        public MountVolume(string raw, bool isExpanded)
+        public MountVolume(string fromString)
         {
-            this.IsExpanded = isExpanded;
-            if (this.IsExpanded)
-            {
-                ParseVolumeString(raw);
-            }
-            else
-            {
-                this.Raw = raw;
-            }
+            ParseVolumeString(fromString);
         }
 
         private void ParseVolumeString(string volume)
@@ -261,8 +293,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
         public string SourceVolumePath { get; set; }
         public string TargetVolumePath { get; set; }
         public bool ReadOnly { get; set; }
-        public bool IsExpanded { get; set; }
-        public string Raw { get; set; }
     }
 
     public class PortMapping
@@ -272,60 +302,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             this.HostPort = hostPort;
             this.ContainerPort = containerPort;
             this.Protocol = protocol;
-            this.IsExpanded = true;
-        }
-
-        public PortMapping(string raw, bool isExpanded)
-        {
-            this.IsExpanded = isExpanded;
-            if (this.IsExpanded)
-            {
-                ParsePortString(raw);
-            }
-            else
-            {
-                this.Raw = raw;
-            }
-        }
-
-        private void ParsePortString(string port)
-        {
-            var protoSplit = port.Split("/");
-            String portString;
-            String protoString = null;
-            if (protoSplit.Length == 2)
-            {
-                protoString = protoSplit[1];
-            }
-            portString = protoSplit[0];
-            var portSplit = portString.Split(":");
-            if (portSplit.Length == 3)
-            {
-                // host:hostport:targetport
-                HostPort = $"{portSplit[0]}:{portSplit[1]}";
-                ContainerPort = portSplit[2];
-                Protocol = protoString;
-            }
-            else if (portSplit.Length == 2)
-            {
-                // hostport:targetport
-                HostPort = portSplit[0];
-                ContainerPort = portSplit[1];
-                Protocol = protoString;
-            }
-            else
-            {
-                // target - or, default to passing straight through
-                ContainerPort = portString;
-                Protocol = protoString;
-            }
         }
 
         public string HostPort { get; set; }
         public string ContainerPort { get; set; }
         public string Protocol { get; set; }
-        public bool IsExpanded { get; set; }
-        public string Raw { get; set; }
     }
 
     public class DockerVersion

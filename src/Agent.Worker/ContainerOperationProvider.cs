@@ -98,27 +98,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 throw new NotSupportedException(StringUtil.Loc("MinRequiredDockerClientVersion", requiredDockerVersion, _dockerManger.DockerPath, dockerVersion.ClientVersion));
             }
 
-            executionContext.Debug($"Delete stale container networks from previous jobs");
-            int networkPruneExitCode = await _dockerManger.DockerNetworkPrune(executionContext);
-            if (networkPruneExitCode != 0)
-            {
-                executionContext.Warning($"Delete stale container networks failed, docker network prune fail with exit code {networkPruneExitCode}");
-            }
-
-            // Create local docker network for this job to avoid port conflict when multiple agents run on same machine.
-            // All containers within a job join the same network
-            var existingNetwork = executionContext.Variables.Get(Constants.Variables.Agent.ContainerNetwork);
-            if (string.IsNullOrEmpty(existingNetwork))
-            {
-                var newNetwork = $"vsts_network_{Guid.NewGuid().ToString("N")}";
-                await CreateContainerNetworkAsync(executionContext, newNetwork);
-                containers.ForEach(container => container.ContainerNetwork = newNetwork);
-            }
-            else
-            {
-                containers.ForEach(container => container.ContainerNetwork = existingNetwork);
-            }
-
             // Clean up containers left by previous runs
             executionContext.Debug($"Delete stale containers from previous jobs");
             var staleContainers = await _dockerManger.DockerPS(executionContext, $"--all --quiet --no-trunc --filter \"label={_dockerManger.DockerInstanceLabel}\"");
@@ -130,6 +109,19 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                     executionContext.Warning($"Delete stale containers failed, docker rm fail with exit code {containerRemoveExitCode} for container {staleContainer}");
                 }
             }
+
+            executionContext.Debug($"Delete stale container networks from previous jobs");
+            int networkPruneExitCode = await _dockerManger.DockerNetworkPrune(executionContext);
+            if (networkPruneExitCode != 0)
+            {
+                executionContext.Warning($"Delete stale container networks failed, docker network prune fail with exit code {networkPruneExitCode}");
+            }
+
+            // Create local docker network for this job to avoid port conflict when multiple agents run on same machine.
+            // All containers within a job join the same network
+            var containerNetwork = $"vsts_network_{Guid.NewGuid().ToString("N")}";
+            await CreateContainerNetworkAsync(executionContext, containerNetwork);
+            containers.ForEach(container => container.ContainerNetwork = containerNetwork);
 
             foreach (var container in containers)
             {
@@ -146,19 +138,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             ArgUtil.NotNull(containers, nameof(containers));
 
             var uniqueNetworks = new HashSet<string>();
+            var containerNetwork = containers.FirstOrDefault().ContainerNetwork;
             foreach (var container in containers)
             {
                 await StopContainerAsync(executionContext, container);
-                if (!uniqueNetworks.Contains(container.ContainerNetwork) && !String.IsNullOrEmpty(container.ContainerNetwork))
-                {
-                    uniqueNetworks.Add(container.ContainerNetwork);
-                }
             }
-            // Remove any unique network created for the job. There will usually be only one
-            foreach (var networkId in uniqueNetworks)
-            {
-                await RemoveContainerNetworkAsync(executionContext, networkId);
-            }
+            // Remove the container network
+            await RemoveContainerNetworkAsync(executionContext, containerNetwork);
         }
 
         private async Task StartContainerAsync(IExecutionContext executionContext, ContainerInfo container)
@@ -301,18 +287,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 {
                     throw new InvalidOperationException($"Docker start fail with exit code {startExitCode}");
                 }
-
-                // Get port mappings of running container
-                if (executionContext.Container == null && !container.IsJobContainer)
-                {
-                    container.PortMappings = await _dockerManger.DockerPort(executionContext, container.ContainerId);
-                    foreach (var port in container.PortMappings)
-                    {
-                        executionContext.Variables.Set(
-                            $"{Constants.Variables.Agent.ServicePortPrefix}.{container.ContainerNetworkAlias}.ports.{port.ContainerPort}",
-                            $"{port.HostPort}");
-                    }
-                }
             }
             finally
             {
@@ -351,11 +325,23 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
                 Trace.Error(ex);
             }
 
+            // Get port mappings of running container
+            if (executionContext.Container == null && !container.IsJobContainer)
+            {
+                container.AddPortMappings(await _dockerManger.DockerPort(executionContext, container.ContainerId));
+                foreach (var port in container.PortMappings)
+                {
+                    executionContext.Variables.Set(
+                        $"{Constants.Variables.Agent.ServicePortPrefix}.{container.ContainerNetworkAlias}.ports.{port.ContainerPort}",
+                        $"{port.HostPort}");
+                }
+            }
+
 #if !OS_WINDOWS
             if (container.IsJobContainer)
             {
                 // Ensure bash exist in the image
-                int execWhichBashExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"which bash");
+                int execWhichBashExitCode = await _dockerManger.DockerExec(executionContext, container.ContainerId, string.Empty, $"sh -c \"command -v bash\"");
                 if (execWhichBashExitCode != 0)
                 {
                     throw new InvalidOperationException($"Docker exec fail with exit code {execWhichBashExitCode}");
@@ -442,12 +428,15 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker
             ArgUtil.NotNull(executionContext, nameof(executionContext));
             ArgUtil.NotNull(container, nameof(container));
 
-            executionContext.Output($"Stop and remove container: {container.ContainerDisplayName}");
-
-            int rmExitCode = await _dockerManger.DockerRemove(executionContext, container.ContainerId);
-            if (rmExitCode != 0)
+            if (!string.IsNullOrEmpty(container.ContainerId))
             {
-                executionContext.Warning($"Docker rm fail with exit code {rmExitCode}");
+                executionContext.Output($"Stop and remove container: {container.ContainerDisplayName}");
+
+                int rmExitCode = await _dockerManger.DockerRemove(executionContext, container.ContainerId);
+                if (rmExitCode != 0)
+                {
+                    executionContext.Warning($"Docker rm fail with exit code {rmExitCode}");
+                }
             }
         }
 
