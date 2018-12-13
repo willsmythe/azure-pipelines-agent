@@ -117,7 +117,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Container
             }
             foreach (var port in container.UserPortMappings)
             {
-                dockerOptions.Add($"-p {port}");
+                dockerOptions.Add($"-p {port.Value}");
             }
             dockerOptions.Add($"{container.ContainerCreateOptions}");
             foreach (var env in container.ContainerEnvironmentVariables)
