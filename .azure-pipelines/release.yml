@@ -9,7 +9,7 @@ jobs:
   steps:
 
   # Steps template for windows platform
-  - template: .vsts.template.windows.yml
+  - template: template-windows.yml
   
   # Package dotnet core windows dependency (VC++ Redistributable)
   - powershell: |
@@ -238,7 +238,7 @@ jobs:
   steps:
 
   # Steps template for windows platform
-  - template: .vsts.template.windows.yml
+  - template: template-windows.yml
   
   # Package dotnet core windows dependency (VC++ Redistributable)
   - powershell: |
@@ -462,7 +462,7 @@ jobs:
   steps:
 
   # Steps template for non-windows platform
-  - template: .vsts.template.nonwindows.yml
+  - template: template-nonwindows.yml
 
   # Create agent package zip
   - script: ./dev.sh package Release
@@ -487,7 +487,7 @@ jobs:
   steps:
 
   # Steps template for non-windows platform
-  - template: .vsts.template.nonwindows.yml
+  - template: template-nonwindows.yml
 
   # Create agent package zip
   - script: ./dev.sh package Release
@@ -512,7 +512,7 @@ jobs:
   steps:
 
   # Steps template for windows platform
-  - template: .vsts.template.nonwindows.yml
+  - template: template-nonwindows.yml
   
   # Create agent package zip
   - script: ./dev.sh package Release

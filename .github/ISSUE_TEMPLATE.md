@@ -1,32 +1,34 @@
-## Having issue with YAML?
-Log issue at [Azure-Pipelines-Yaml](https://github.com/Microsoft/azure-pipelines-yaml), it contains YAML templates and samples for Azure Pipelines. Also a place for the community to share best practices, ideas, and so on. File suggestions and issues here if they're specific to YAML pipelines.
+## Having an issue with YAML?
+Open an issue at [Microsoft/azure-pipelines-yaml](https://github.com/Microsoft/azure-pipelines-yaml). This repo contains YAML templates and samples for Azure Pipelines. It is also a place for the community to share best practices, ideas, etc. Open suggestions and issues here if they're specific to YAML pipelines.
 
-## Having issue with Tasks?
-Log issue at [Azure-Pipelines-Tasks](https://github.com/Microsoft/azure-pipelines-tasks), it contains all of the inbox tasks we ship with Azure-Pipelines/VSTS/TFS. If you are having issues with tasks in Build/Release jobs (e.g. unreasonable task failure) please log an issue there.
+## Having an issue with a task?
+Open an issue at [Microsoft/azure-pipelines-tasks](https://github.com/Microsoft/azure-pipelines-tasks). This repo contains all tasks shipped in Azure Pipelines and TFS. 
 
-## Having issue with software on Hosted Agent?
-Log issue at [Hosted Agent Image Repository](https://github.com/Microsoft/vsts-image-generation), it contains the VM image used in the VSTS Hosted Agent Pool. If you are having Build/Release failures that seems like they are related to software installed on the Hosted Agent (e.g. the DotnetSDK is missing or the AzureSDK is not on the latest version) please log an issue there.
+## Having an issue with software on a hosted agent?
+Open an issue at [Microsoft/azure-pipelines-image-generation](https://github.com/Microsoft/azure-pipelines-image-generation). This repo contains the VM image used in the Azure Pipelines Hosted Agent Pool. Issues here are for build/release failures related to software installed on the hosted agent (e.g. the .NET SDK is missing or the Azure SDK is not on the latest version).
 
-## Having generic issue with Azure-Pipelines/VSTS/TFS?
-Please report it to the [Developer Community](https://developercommunity.visualstudio.com/spaces/21/index.html)
+## Having a generic issue with Azure Pipelines or TFS?
+Report it on the [Developer Community](https://developercommunity.visualstudio.com/spaces/21/index.html).
 
-## Have you tried trouble shooting?
-[Trouble shooting doc](https://www.visualstudio.com/en-us/docs/build/troubleshooting)
+## Have you tried troubleshooting?
+See the [troubleshooting docs](https://docs.microsoft.com/azure/devops/pipelines/troubleshooting).
 
-## Agent Version and Platform
+## Agent version and platform
 Version of your agent? 2.102.0/2.100.1/...
 
 OS of the machine running the agent? OSX/Windows/Linux/...
 
-## VSTS Type and Version
-VisualStudio.com or On-Prem TFS?
+## Product
 
-If On-Prem TFS, which release? 2015 RTM/QU1/QU2/...
+Azure DevOps / Azure Pipelines or on-premises TFS?
 
-If VisualStudio.com, what is your account name? http://account.visualstudio.com
+* If on-premises, which release? 2015 RTM/QU1/QU2, 2017, etc
+* If Azure DevOps / Azure Pipelines, what is the name of your organization (`dev.azure.com/{organization}`)?
 
 ## What's not working?
 Please include error messages and screenshots.
 
-## Agent and Worker's Diagnostic Logs
-Logs are located in the agent's `_diag` folder. The agent logs are prefixed with `Agent_` and the worker logs are prefixed with `Worker_`. All sensitive information should already be masked out, please double check before pasting here.
+## Agent and worker diagnostic logs
+Logs are located in the agent's `_diag` folder. The agent logs are prefixed with `Agent_` and the worker logs are prefixed with `Worker_`. 
+
+> All sensitive information should already be masked out, please double check before including in the issue.
