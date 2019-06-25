@@ -20,7 +20,7 @@ namespace Agent.Plugins.PipelineCache
 {    
     public class SavePipelineCacheV0 : PipelineCacheTaskPluginBase
     {
-        public override Guid Id => PipelineCachePluginConstants.SaveCacheTaskId;
+        public override string Stage => "post";
 
         protected override async Task ProcessCommandInternalAsync(
             AgentTaskPluginExecutionContext context, 

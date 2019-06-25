@@ -18,9 +18,9 @@ namespace Agent.Plugins.PipelineCache
 {
     public abstract class PipelineCacheTaskPluginBase : IAgentTaskPlugin
     {
-        public abstract Guid Id { get; }
+        public Guid Id => PipelineCachePluginConstants.CacheTaskId;
 
-        public string Stage => "main";
+        public abstract String Stage { get; }
 
         public async Task RunAsync(AgentTaskPluginExecutionContext context, CancellationToken token)
         {
