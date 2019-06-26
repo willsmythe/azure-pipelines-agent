@@ -4,6 +4,6 @@ namespace Agent.Plugins.PipelineCache
 {
     public static class PipelineCachePluginConstants
     {
-        public static readonly Guid CacheTaskId = new Guid("1B7B4CD4-D9AA-4165-8C00-1BBC91B196B5");
+        public static readonly Guid CacheTaskId = new Guid("D53CCAB4-555E-4494-9D06-11DB043FB4A9");
     }
 }
