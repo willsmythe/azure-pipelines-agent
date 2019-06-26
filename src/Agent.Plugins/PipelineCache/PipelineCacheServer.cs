@@ -136,9 +136,13 @@ namespace Agent.Plugins.PipelineCache
                     
                     if (!string.IsNullOrEmpty(variableToSetOnHit))
                     {
+                        if (context.Variables.ContainsKey(variableToSetOnHit))
+                        {
+                            context.Output($"Overwriting the 'variableToSetOnHit' value to {variableToSetOnHit}");
+                        }
                         context.SetVariable($"{variableToSetOnHit}", "True");
                     }
-                    Console.WriteLine("Cache restored.");
+                    context.Output("Cache restored.");
                 }
             }
         }
