@@ -136,7 +136,7 @@ namespace Agent.Plugins.PipelineCache
                     
                     if (!string.IsNullOrEmpty(variableToSetOnHit))
                     {
-                        context.SetVariable($"{PipelineArtifactConstants.PipelineCache}.{variableToSetOnHit}", "True");
+                        context.SetVariable($"{variableToSetOnHit}", "True");
                     }
                     Console.WriteLine("Cache restored.");
                 }
