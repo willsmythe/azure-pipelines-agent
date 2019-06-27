@@ -29,6 +29,14 @@ namespace Agent.Plugins.PipelineCache
             string salt,
             CancellationToken token)
         {
+            var JobStatus = context.Variables["agent.jobstatus"];
+
+            if(JobStatus != null && !JobStatus.Value.Equals("Succeeded"))
+            {
+                context.Output($"Exiting because the JobStatus is {JobStatus.Value}");
+                return;
+            }
+
             string[] key = keyStr.Split(
                 new[] { '\n' },
                 StringSplitOptions.RemoveEmptyEntries
