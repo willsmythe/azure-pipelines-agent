@@ -29,15 +29,16 @@ namespace Agent.Plugins.PipelineCache
             string salt,
             CancellationToken token)
         {
+            
             if(!context.Variables.ContainsKey("agent.jobstatus"))
             {
                 return;
             }
 
             var JobStatus = context.Variables["agent.jobstatus"];
-            if(JobStatus != null && !JobStatus.Value.Equals("Succeeded"))
+            if(JobStatus != null && !JobStatus.Value.Equals(Microsoft.TeamFoundation.Build.WebApi.TaskResult.Succeeded.ToString()))
             {
-                context.Output($"Exiting because the JobStatus is {JobStatus.Value}");
+                context.Output($"Skipping saving cache because the job status is {JobStatus.Value}");
                 return;
             }
 

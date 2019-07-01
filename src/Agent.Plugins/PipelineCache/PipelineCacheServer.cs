@@ -138,7 +138,7 @@ namespace Agent.Plugins.PipelineCache
                     {
                         if(context.Variables.ContainsKey(variableToSetOnHit))
                         {
-                            context.Output($"Overwriting cacheHitVar variable to {variableToSetOnHit}");
+                            context.Output($"Overwriting {variableToSetOnHit}");
                         }
                         context.SetVariable($"{variableToSetOnHit}", "True");
                     }
