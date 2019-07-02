@@ -1,20 +1,8 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Threading;
+using System.Threading.Tasks;
 using Agent.Sdk;
-using Microsoft.TeamFoundation.Build.WebApi;
 using Microsoft.TeamFoundation.DistributedTask.WebApi;
-using Microsoft.VisualStudio.Services.Agent.Util;
-using Microsoft.VisualStudio.Services.BlobStore.Common;
-using Microsoft.VisualStudio.Services.BlobStore.WebApi;
-using Microsoft.VisualStudio.Services.Common;
-using Microsoft.VisualStudio.Services.Content.Common.Tracing;
-using Microsoft.VisualStudio.Services.PipelineCache.WebApi;
-using Microsoft.VisualStudio.Services.WebApi;
-using Newtonsoft.Json;
 
 namespace Agent.Plugins.PipelineCache
 {    
@@ -29,16 +17,18 @@ namespace Agent.Plugins.PipelineCache
             string salt,
             CancellationToken token)
         {
-            
-            if(!context.Variables.ContainsKey("agent.jobstatus"))
+            TaskResult? jobStatus = null;
+            if (context.Variables.TryGetValue("agent.jobstatus", out VariableValue jobStatusVar))
             {
-                return;
+                if (Enum.TryParse<TaskResult>(jobStatusVar?.Value ?? string.Empty, true, out TaskResult result))
+                {
+                    jobStatus = result;
+                }
             }
 
-            var JobStatus = context.Variables["agent.jobstatus"];
-            if(JobStatus != null && !JobStatus.Value.Equals(Microsoft.TeamFoundation.Build.WebApi.TaskResult.Succeeded.ToString()))
+            if (!TaskResult.Succeeded.Equals(jobStatus))
             {
-                context.Output($"Skipping saving cache because the job status is {JobStatus.Value}");
+                context.Warning($"Skipping because the job status was not 'Succeeded'.");
                 return;
             }
 
