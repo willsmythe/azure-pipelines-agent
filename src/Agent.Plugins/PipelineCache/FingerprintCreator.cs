@@ -186,12 +186,16 @@ namespace Agent.Plugins.PipelineCache
 
             var resolvedSegments = new List<string>();
 
-            Action<string, KeySegmentType, Object> LogKeySegment = (segment, type, details) => {
-                Func<string,int,string> FormatForDisplay = (value, displayLength) => {
-                    if (value.Length > displayLength) {
+            Action<string, KeySegmentType, Object> LogKeySegment = (segment, type, details) =>
+            {
+                Func<string,int,string> FormatForDisplay = (value, displayLength) =>
+                {
+                    if (value.Length > displayLength)
+                    {
                         value = value.Substring(0, displayLength - 3) + "...";
                     }
-                    return value. PadRight(displayLength);
+
+                    return value.PadRight(displayLength);
                 };
 
                 string formattedSegment = FormatForDisplay(segment, Math.Min(keySegments.Select(s => s.Length).Max(), 50));
@@ -200,7 +204,8 @@ namespace Agent.Plugins.PipelineCache
                 {
                     context.Output($" - {formattedSegment} [string]");
                 }
-                else {
+                else
+                {
                     var matches = (details as MatchedFile[]) ?? new MatchedFile[0];
                     
                     if (type == KeySegmentType.FilePath)
@@ -210,10 +215,14 @@ namespace Agent.Plugins.PipelineCache
                     }
                     else if (type == KeySegmentType.FilePattern)
                     {
-                        context.Output($" - {formattedSegment} [file pattern; matches: {(!matches.Any() ? "none (error)" : matches.Length.ToString())}]");
-                        int filePathDisplayLength = Math.Min(matches.Select(mf => mf.DisplayPath.Length).Max(), 70);
-                        foreach (var match in matches) {
-                            context.Output($"   - {FormatForDisplay(match.DisplayPath, filePathDisplayLength)} --> {match.Hash}");
+                        context.Output($" - {formattedSegment} [file pattern; matches: {matches.Length}]");
+                        if (matches.Any())
+                        {
+                            int filePathDisplayLength = Math.Min(matches.Select(mf => mf.DisplayPath.Length).Max(), 70);
+                            foreach (var match in matches)
+                            {
+                                context.Output($"   - {FormatForDisplay(match.DisplayPath, filePathDisplayLength)} --> {match.Hash}");
+                            }
                         }
                     }   
                 }
