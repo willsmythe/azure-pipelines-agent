@@ -90,7 +90,7 @@ namespace Agent.Plugins.PipelineCache
 
             string workspaceRoot = context.Variables.GetValueOrDefault("pipeline.workspace")?.Value;
 
-            Func<string, bool, Fingerprint> keySegmentsResolver = (keySegments, appendWildcard) => {
+            Func<string[], bool, Fingerprint> keySegmentsResolver = (keySegments, appendWildcard) => {
                 context.Output($"Resolving key: {string.Join(" | ", keySegments)}");
                 Fingerprint fingerprint = FingerprintCreator.CreateFromKey(context, keySegments, workspaceRoot);
                 fingerprint.Segments = fingerprint.Segments.Concat(new [] { Fingerprint.Wildcard} ).ToArray();

@@ -23,7 +23,7 @@ namespace Agent.Plugins.PipelineCache
             PipelineCacheServer server = new PipelineCacheServer();
             await server.DownloadAsync(
                 context, 
-                (new [] { keyResolver() }).Concat(restoreKeysResolver()),
+                (new [] { keyResolver() }).Concat(restoreKeysResolver()).ToArray(),
                 path,
                 context.GetInput(PipelineCacheTaskPluginConstants.CacheHitVariable, required: false),
                 token);

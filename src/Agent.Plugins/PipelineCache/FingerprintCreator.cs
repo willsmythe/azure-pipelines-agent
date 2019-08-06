@@ -98,6 +98,19 @@ namespace Agent.Plugins.PipelineCache
             public SearchOption Depth;
         }
 
+        internal struct MatchedFile
+        {
+            public string DisplayPath;
+            public long FileLength;
+            public string Hash;
+        }
+
+        internal enum KeySegmentType
+        {
+            String = 0,
+            FilePath = 1,
+            FilePattern = 2
+        }
 
         // Given a globby path, figure out where to start enumerating.
         // Room for optimization here e.g. 
@@ -186,17 +199,46 @@ namespace Agent.Plugins.PipelineCache
                 CheckKeySegment(keySegment);
             }
 
-            Action<string,string,string?> LogKeySegment = (keySegment, type, details) => {                
-                int longestSegment = Math.min(60, keySegments.Select(s => s.length));
-                context.Verbose($" - {keySegment} [{type}] ");
+            Func<string,int,string> FormatStringForDisplay = (value, displayLength) => {
+                if (value.Length > displayLength) {
+                    value = value.Substring(0, displayLength - 3) + "...";
+                }
+                return value.PadRight(displayLength);
+            };
+
+            Action<string, KeySegmentType, Object> LogKeySegment = (segment, type, details) => {
+                string formattedSegment = FormatStringForDisplay(segment, Math.Min(keySegments.Select(s => s.Length).Max(), 50));
+
+                if (type == KeySegmentType.String)
+                {
+                    context.Output($" - {formattedSegment} [string]");
+                }
+                else {
+                    MatchedFile[] matchedFiles = details as MatchedFile[];
+                    
+                    if (type == KeySegmentType.FilePath)
+                    {
+                        string hash = (matchedFiles != null && matchedFiles.Length == 1 ? matchedFiles[0].Hash : null);
+                        context.Output($" - {formattedSegment} [file] --> {hash ?? "(not found)"}");
+                    }
+                    else if (type == KeySegmentType.FilePattern)
+                    {
+                        context.Output($" - {formattedSegment} [file pattern; matches: {matchedFiles.Length}]");
+                        
+                        int filePathDisplayLength = Math.Min(keySegments.Select(s => s.Length).Max(), 70);
+                        foreach (var matchedFile in matchedFiles) {
+                            context.Output($"   - {FormatStringForDisplay(matchedFile.DisplayPath, filePathDisplayLength)} --> {matchedFile.Hash}");
+                        }
+                    }
+                }
             };    
 
             foreach (string keySegment in keySegments)
             {
                 if (!IsPathyKeySegment(keySegment))
                 {
-                    LogKeySegment(keySegment, "string");
-                    resolvedSegments.Add($"{keySegment}");
+                    LogKeySegment(keySegment, KeySegmentType.String, null);
+                    resolvedSegments.Add(keySegment);
                 }
                 else
                 {
@@ -228,7 +270,7 @@ namespace Agent.Plugins.PipelineCache
                         return MakePathCanonical(defaultWorkingDirectory, excludeRule);
                     }).ToArray();
 
-                    var matchedFiles = new SortedDictionary<string,Tuple<string,long,string>>(StringComparer.Ordinal);
+                    var matchedFiles = new SortedDictionary<string, MatchedFile>(StringComparer.Ordinal);
 
                     foreach(var kvp in enumerations)
                     {
@@ -246,37 +288,32 @@ namespace Agent.Plugins.PipelineCache
                                 byte[] hash = sha256.ComputeHash(fs);
                                 // Path.GetRelativePath returns 'The relative path, or path if the paths don't share the same root.'
                                 string displayPath = filePathRoot == null ? path : Path.GetRelativePath(filePathRoot, path);
-                                matchedFiles.Add(path, $"\nSHA256({displayPath})=[{fs.Length}]{hash.ToHex()}");
+                                matchedFiles.Add(path, new MatchedFile() { DisplayPath = displayPath, FileLength = fs.Length, Hash = hash.ToHex() });
                             }
                         }
                     }
 
+                    string matchedFilesString = matchedFiles.Aggregate(new StringBuilder(),
+                        (sb, kvp) => sb.Append($"\nSHA256({kvp.Value.DisplayPath})=[{kvp.Value.FileLength}]{kvp.Value.Hash}"),
+                        sb => sb.ToString());
+
+                    context.Debug($"Matched files combined: {matchedFilesString}");
+
+                    LogKeySegment(keySegment, 
+                        keySegment.IndexOfAny(GlobChars) >= 0 || matchedFiles.Count() > 1 ? KeySegmentType.FilePattern : KeySegmentType.FilePath,
+                        matchedFiles.Values.ToArray());
+
                     if (!matchedFiles.Any())
                     {
-                        throw new FileNotFoundException("No files found.");
+                        throw new FileNotFoundException($"No matching files found for key segment: {keySegment}");
                     }
 
-                    var matchedFilesBuilder = new StringBuilder();
-                    foreach(string fileHashString in matchedFiles.Values)
-                    {
-                        matchedFilesBuilder.Append(fileHashString);
-                    }
-
-                    string wholeFileHashString = matchedFilesBuilder.ToString();
-                    string summary = SummarizeString(wholeFileHashString);
-                    context.Output($"File hashes summarized as `{summary}` from BASE64(SHA256(`{wholeFileHashString}`))");
-                    resolvedSegments.Add(summary);
+                    string matchedFilesHash = Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(matchedFilesString)));
+                    resolvedSegments.Add(matchedFilesHash);
                 }                 
             }
 
             return new Fingerprint() { Segments = resolvedSegments.ToArray() };
-        }
-
-        internal static string SummarizeString(string input)
-        {
-            var sha256 = new SHA256Managed();
-            byte[] fileHashStringBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
-            return Convert.ToBase64String(fileHashStringBytes);
         }
     }
 }
