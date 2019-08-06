@@ -167,25 +167,17 @@ namespace Agent.Plugins.PipelineCache
             }
         }
 
-/*
- - jest-v11        [string]
- - Linux           [string]
- - **_package.json [file pattern; 4 matches]
-   - packages/babel-jest/package.json              --> CA3D163BAB055381827226140568F3BEF7EAAC187CEBD76878E0B63E9E442356
-   - packages/babel-plugin-jest-hoist/package.json --> 75D421513AC39C243147FBF6E8019B8D05A815534E950E165FCA4EDFE2200250
-   - packages/babel-preset-jest/package.json       --> DB2AAE67D6E4881DD0104E61478B00440A6BBD3F41DC88F780FDEEEE17690D3A
-   - packages/diff-sequences/package.json          --> 05D421513AC39C243147FBF6E8019B8D05A815534E950E165FCA4EDFE2200250
- - 15685           [string]
-
- */
-
-        //internal delegate void KeySegmentLogger(string segment, string segmentType, string? details);
-
-        public static Fingerprint CreateFromKey(
+        public static Fingerprint ResolveKey(
             AgentTaskPluginExecutionContext context,
             IEnumerable<string> keySegments,
-            string filePathRoot)
+            string filePathRoot = null)
         {
+            // Quickly validate all segments
+            foreach (string keySegment in keySegments)
+            {
+                CheckKeySegment(keySegment);
+            }
+
             var sha256 = new SHA256Managed();
 
             string defaultWorkingDirectory = context.Variables.GetValueOrDefault(
@@ -194,42 +186,36 @@ namespace Agent.Plugins.PipelineCache
 
             var resolvedSegments = new List<string>();
 
-            foreach (string keySegment in keySegments)
-            {
-                CheckKeySegment(keySegment);
-            }
-
-            Func<string,int,string> FormatStringForDisplay = (value, displayLength) => {
-                if (value.Length > displayLength) {
-                    value = value.Substring(0, displayLength - 3) + "...";
-                }
-                return value.PadRight(displayLength);
-            };
-
             Action<string, KeySegmentType, Object> LogKeySegment = (segment, type, details) => {
-                string formattedSegment = FormatStringForDisplay(segment, Math.Min(keySegments.Select(s => s.Length).Max(), 50));
+                Func<string,int,string> FormatForDisplay = (value, displayLength) => {
+                    if (value.Length > displayLength) {
+                        value = value.Substring(0, displayLength - 3) + "...";
+                    }
+                    return value. PadRight(displayLength);
+                };
+
+                string formattedSegment = FormatForDisplay(segment, Math.Min(keySegments.Select(s => s.Length).Max(), 50));
 
                 if (type == KeySegmentType.String)
                 {
                     context.Output($" - {formattedSegment} [string]");
                 }
                 else {
-                    MatchedFile[] matchedFiles = details as MatchedFile[];
+                    var matches = (details as MatchedFile[]) ?? new MatchedFile[0];
                     
                     if (type == KeySegmentType.FilePath)
                     {
-                        string hash = (matchedFiles != null && matchedFiles.Length == 1 ? matchedFiles[0].Hash : null);
-                        context.Output($" - {formattedSegment} [file] --> {hash ?? "(not found)"}");
+                        string fileHash = matches.Length > 0 ? matches[0].Hash : null;
+                        context.Output($" - {formattedSegment} [file] --> {fileHash ?? "(not found)"}");
                     }
                     else if (type == KeySegmentType.FilePattern)
                     {
-                        context.Output($" - {formattedSegment} [file pattern; matches: {matchedFiles.Length}]");
-                        
-                        int filePathDisplayLength = Math.Min(keySegments.Select(s => s.Length).Max(), 70);
-                        foreach (var matchedFile in matchedFiles) {
-                            context.Output($"   - {FormatStringForDisplay(matchedFile.DisplayPath, filePathDisplayLength)} --> {matchedFile.Hash}");
+                        context.Output($" - {formattedSegment} [file pattern; matches: {(!matches.Any() ? "none (error)" : matches.Length.ToString())}]");
+                        int filePathDisplayLength = Math.Min(matches.Select(mf => mf.DisplayPath.Length).Max(), 70);
+                        foreach (var match in matches) {
+                            context.Output($"   - {FormatForDisplay(match.DisplayPath, filePathDisplayLength)} --> {match.Hash}");
                         }
-                    }
+                    }   
                 }
             };    
 

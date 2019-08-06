@@ -92,7 +92,7 @@ namespace Agent.Plugins.PipelineCache
 
             Func<string[], bool, Fingerprint> keySegmentsResolver = (keySegments, appendWildcard) => {
                 context.Output($"Resolving key: {string.Join(" | ", keySegments)}");
-                Fingerprint fingerprint = FingerprintCreator.CreateFromKey(context, keySegments, workspaceRoot);
+                Fingerprint fingerprint = FingerprintCreator.ResolveKey(context, keySegments, workspaceRoot);
                 fingerprint.Segments = fingerprint.Segments.Concat(new [] { Fingerprint.Wildcard} ).ToArray();
                 context.Output($"Resolved to: {fingerprint}");
                 return fingerprint;
