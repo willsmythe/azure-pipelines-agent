@@ -13,18 +13,17 @@ namespace Agent.Plugins.PipelineCache
 
         protected override async Task ProcessCommandInternalAsync(
             AgentTaskPluginExecutionContext context,
-            Fingerprint fingerprint,
-            Func<Fingerprint[]> restoreKeysGenerator,
+            Func<Fingerprint> keyResolver,
+            Func<Fingerprint[]> restoreKeysResolver,
             string path,
             CancellationToken token)
         {
             context.SetTaskVariable(RestoreStepRanVariableName, RestoreStepRanVariableValue);
 
-            var server = new PipelineCacheServer();
-            Fingerprint[] restoreFingerprints = restoreKeysGenerator();
+            PipelineCacheServer server = new PipelineCacheServer();
             await server.DownloadAsync(
                 context, 
-                (new [] { fingerprint}).Concat(restoreFingerprints).ToArray(),
+                (new [] { keyResolver() }).Concat(restoreKeysResolver()),
                 path,
                 context.GetInput(PipelineCacheTaskPluginConstants.CacheHitVariable, required: false),
                 token);

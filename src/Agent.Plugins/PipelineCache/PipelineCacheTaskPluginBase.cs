@@ -23,7 +23,7 @@ namespace Agent.Plugins.PipelineCache
 
         public abstract String Stage { get; }
 
-        internal static (bool isOldFormat, string[] keySegments,IEnumerable<string[]> restoreKeys) ParseIntoSegments(string salt, string key, string restoreKeysBlock)
+        internal static (bool isOldFormat, string[] keySegments, IEnumerable<string[]> restoreKeys) ParseKeys(string salt, string key, string restoreKeysBlock)
         {
             Func<string,string[]> splitAcrossPipes = (s) => {
                 var segments = s.Split(new [] {'|'},StringSplitOptions.RemoveEmptyEntries).Select(segment => segment.Trim());
@@ -72,47 +72,42 @@ namespace Agent.Plugins.PipelineCache
 
             return (isOldFormat, keySegments, restoreKeys);
         }
-        
+                
         public async Task RunAsync(AgentTaskPluginExecutionContext context, CancellationToken token)
         {
             ArgUtil.NotNull(context, nameof(context));
 
-            VariableValue saltValue = context.Variables.GetValueOrDefault(SaltVariableName);
-            string salt = saltValue?.Value ?? string.Empty;
+            string salt = context.Variables.GetValueOrDefault(SaltVariableName)?.Value;
+            string keyInput = context.GetInput(PipelineCacheTaskPluginConstants.Key, required: true);
+            string restoreKeysInput = context.GetInput(PipelineCacheTaskPluginConstants.RestoreKeys, required: false);
 
-            VariableValue workspaceRootValue = context.Variables.GetValueOrDefault("pipeline.workspace");
-            string worksapceRoot = workspaceRootValue?.Value;
-
-            string key = context.GetInput(PipelineCacheTaskPluginConstants.Key, required: true);
-            string restoreKeysBlock = context.GetInput(PipelineCacheTaskPluginConstants.RestoreKeys, required: false);
-
-            (bool isOldFormat, string[] keySegments, IEnumerable<string[]> restoreKeys) = ParseIntoSegments(salt, key, restoreKeysBlock);
+            (bool isOldFormat, string[] key, IEnumerable<string[]> restoreKeys) = ParseKeys(salt, keyInput, restoreKeysInput);
 
             if (isOldFormat)
             {
                 context.Warning(OldKeyFormatMessage);
             }
 
-            context.Output($"Resolving key `{string.Join(" | ", keySegments)}`...");
-            Fingerprint keyFp = FingerprintCreator.EvaluateKeyToFingerprint(context, worksapceRoot, keySegments);
-            context.Output($"Resolved to `{keyFp}`.");
+            string workspaceRoot = context.Variables.GetValueOrDefault("pipeline.workspace")?.Value;
 
-            Func<Fingerprint[]> restoreKeysGenerator = () => 
-                restoreKeys.Select(restoreKey => {
-                    context.Output($"Resolving restore key `{string.Join(" | ", restoreKey)}`...");
-                    Fingerprint f = FingerprintCreator.EvaluateKeyToFingerprint(context, worksapceRoot, restoreKey);
-                    f.Segments = f.Segments.Concat(new [] { Fingerprint.Wildcard} ).ToArray();
-                    context.Output($"Resolved to `{f}`.");
-                    return f;
-                }).ToArray();
+            Func<string, bool, Fingerprint> keySegmentsResolver = (keySegments, appendWildcard) => {
+                context.Output($"Resolving key: {string.Join(" | ", keySegments)}");
+                Fingerprint fingerprint = FingerprintCreator.CreateFromKey(context, keySegments, workspaceRoot);
+                fingerprint.Segments = fingerprint.Segments.Concat(new [] { Fingerprint.Wildcard} ).ToArray();
+                context.Output($"Resolved to: {fingerprint}");
+                return fingerprint;
+            };
+
+            Func<Fingerprint> keyResolver = () => keySegmentsResolver(key, false);
+            Func<Fingerprint[]> restoreKeysResolver = () => restoreKeys.Select(restoreKey => keySegmentsResolver(restoreKey, true)).ToArray();
 
             // TODO: Translate path from container to host (Ting)
             string path = context.GetInput(PipelineCacheTaskPluginConstants.Path, required: true);
 
             await ProcessCommandInternalAsync(
                 context,
-                keyFp,
-                restoreKeysGenerator,
+                keyResolver,
+                restoreKeysResolver,
                 path,
                 token);
         }
@@ -120,8 +115,8 @@ namespace Agent.Plugins.PipelineCache
         // Process the command with preprocessed arguments.
         protected abstract Task ProcessCommandInternalAsync(
             AgentTaskPluginExecutionContext context,
-            Fingerprint fingerprint,
-            Func<Fingerprint[]> restoreKeysGenerator,
+            Func<Fingerprint> keyResolver,
+            Func<Fingerprint[]> restoreKeysResolver,
             string path,
             CancellationToken token);
 
