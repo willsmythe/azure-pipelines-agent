@@ -98,11 +98,31 @@ namespace Agent.Plugins.PipelineCache
             public SearchOption Depth;
         }
 
-        internal struct MatchedFile
+        internal class MatchedFile
         {
+            public MatchedFile(string displayPath, long fileLength, string hash)
+            {
+                this.DisplayPath = displayPath;
+                this.FileLength = fileLength;
+                this.Hash = hash;    
+            }
+
             public string DisplayPath;
             public long FileLength;
             public string Hash;
+
+            public string GetHash() {
+                return MatchedFile.GenerateHash(new [] { this });
+            }
+
+            public static string GenerateHash(IEnumerable<MatchedFile> matches) {                
+                string s = matches.Aggregate(new StringBuilder(),
+                        (sb, file) => sb.Append($"\nSHA256({file.DisplayPath})=[{file.FileLength}]{file.Hash}"),
+                        sb => sb.ToString());
+
+                var sha256 = new SHA256Managed();
+                return Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(s)));
+            }
         }
 
         internal enum KeySegmentType
@@ -185,6 +205,7 @@ namespace Agent.Plugins.PipelineCache
                 )?.Value;
 
             var resolvedSegments = new List<string>();
+            var exceptions = new List<Exception>();
 
             Action<string, KeySegmentType, Object> LogKeySegment = (segment, type, details) =>
             {
@@ -211,7 +232,7 @@ namespace Agent.Plugins.PipelineCache
                     if (type == KeySegmentType.FilePath)
                     {
                         string fileHash = matches.Length > 0 ? matches[0].Hash : null;
-                        context.Output($" - {formattedSegment} [file] --> {fileHash ?? "(not found)"}");
+                        context.Output($" - {formattedSegment} [file] --> {fileHash ?? "(NOT FOUND)"}");
                     }
                     else if (type == KeySegmentType.FilePattern)
                     {
@@ -283,29 +304,36 @@ namespace Agent.Plugins.PipelineCache
                                 byte[] hash = sha256.ComputeHash(fs);
                                 // Path.GetRelativePath returns 'The relative path, or path if the paths don't share the same root.'
                                 string displayPath = filePathRoot == null ? path : Path.GetRelativePath(filePathRoot, path);
-                                matchedFiles.Add(path, new MatchedFile() { DisplayPath = displayPath, FileLength = fs.Length, Hash = hash.ToHex() });
+                                matchedFiles.Add(path, new MatchedFile(displayPath, fs.Length, hash.ToHex()));
                             }
                         }
                     }
 
-                    string matchedFilesString = matchedFiles.Aggregate(new StringBuilder(),
-                        (sb, kvp) => sb.Append($"\nSHA256({kvp.Value.DisplayPath})=[{kvp.Value.FileLength}]{kvp.Value.Hash}"),
-                        sb => sb.ToString());
-
-                    context.Debug($"Matched files combined: {matchedFilesString}");
+                    var patternSegment = keySegment.IndexOfAny(GlobChars) >= 0 || matchedFiles.Count() > 1;
 
                     LogKeySegment(keySegment, 
-                        keySegment.IndexOfAny(GlobChars) >= 0 || matchedFiles.Count() > 1 ? KeySegmentType.FilePattern : KeySegmentType.FilePath,
+                        patternSegment ? KeySegmentType.FilePattern : KeySegmentType.FilePath,
                         matchedFiles.Values.ToArray());
 
                     if (!matchedFiles.Any())
                     {
-                        throw new FileNotFoundException($"No matching files found for key segment: {keySegment}");
+                        if (patternSegment)
+                        {
+                            exceptions.Add(new FileNotFoundException($"No matching files found for pattern: {keySegment}"));
+                        }
+                        else
+                        {
+                            exceptions.Add(new FileNotFoundException($"File not found: {keySegment}"));
+                        }
                     }
-
-                    string matchedFilesHash = Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(matchedFilesString)));
-                    resolvedSegments.Add(matchedFilesHash);
+                
+                    resolvedSegments.Add(MatchedFile.GenerateHash(matchedFiles.Values));
                 }                 
+            }
+
+            if (exceptions.Any())
+            {
+                throw new AggregateException(exceptions);
             }
 
             return new Fingerprint() { Segments = resolvedSegments.ToArray() };
