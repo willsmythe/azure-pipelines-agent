@@ -100,11 +100,18 @@ namespace Agent.Plugins.PipelineCache
 
         internal class MatchedFile
         {
+            private static readonly SHA256Managed s_sha256 = new SHA256Managed();
+
             public MatchedFile(string displayPath, long fileLength, string hash)
             {
                 this.DisplayPath = displayPath;
                 this.FileLength = fileLength;
                 this.Hash = hash;    
+            }
+
+            public MatchedFile(string displayPath, FileStream fs): 
+                this(displayPath, fs.Length, s_sha256.ComputeHash(fs).ToHex())
+            {
             }
 
             public string DisplayPath;
@@ -120,8 +127,7 @@ namespace Agent.Plugins.PipelineCache
                         (sb, file) => sb.Append($"\nSHA256({file.DisplayPath})=[{file.FileLength}]{file.Hash}"),
                         sb => sb.ToString());
 
-                var sha256 = new SHA256Managed();
-                return Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(s)));
+                return Convert.ToBase64String(s_sha256.ComputeHash(Encoding.UTF8.GetBytes(s)));
             }
         }
 
@@ -197,8 +203,6 @@ namespace Agent.Plugins.PipelineCache
             {
                 CheckKeySegment(keySegment);
             }
-
-            var sha256 = new SHA256Managed();
 
             string defaultWorkingDirectory = context.Variables.GetValueOrDefault(
                 "system.defaultworkingdirectory" // Constants.Variables.System.DefaultWorkingDirectory
@@ -301,10 +305,9 @@ namespace Agent.Plugins.PipelineCache
                         {
                             using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
                             {
-                                byte[] hash = sha256.ComputeHash(fs);
                                 // Path.GetRelativePath returns 'The relative path, or path if the paths don't share the same root.'
                                 string displayPath = filePathRoot == null ? path : Path.GetRelativePath(filePathRoot, path);
-                                matchedFiles.Add(path, new MatchedFile(displayPath, fs.Length, hash.ToHex()));
+                                matchedFiles.Add(path, new MatchedFile(displayPath, fs));
                             }
                         }
                     }

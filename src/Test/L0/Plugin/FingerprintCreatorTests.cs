@@ -143,7 +143,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.PipelineCache
                 var segments = new[]
                 {
                     $"{relPath1}",
-                    $"{relPath2}", 
+                    $"{relPath2}",
                 };
 
                 Fingerprint f = FingerprintCreator.EvaluateKeyToFingerprint(context, directory, segments);
