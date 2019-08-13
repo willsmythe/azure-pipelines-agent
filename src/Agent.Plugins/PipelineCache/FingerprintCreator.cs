@@ -236,7 +236,7 @@ namespace Agent.Plugins.PipelineCache
                     if (type == KeySegmentType.FilePath)
                     {
                         string fileHash = matches.Length > 0 ? matches[0].Hash : null;
-                        context.Output($" - {formattedSegment} [file] --> {fileHash ?? "(NOT FOUND)"}");
+                        context.Output($" - {formattedSegment} [file] {(!string.IsNullOrWhiteSpace(fileHash) ? $"--> {fileHash}" : "(not found)")}");
                     }
                     else if (type == KeySegmentType.FilePattern)
                     {
